@@ -12,6 +12,9 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <dlfcn.h>
+#include <signal.h>
+#include <unwind.h>
 #include <unistd.h>
 #include <cerrno>
 #include <cmath>
@@ -32,6 +35,61 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
+
+/* The Go keeps no tombstones a user can read, so steps and native crashes go to the app's
+ * external files folder, which is reachable over USB. */
+char g_stepsPath[512], g_crashPath[512];
+const char *volatile g_step = "start";
+struct sigaction g_previous[NSIG];
+
+void step(const char *name) {
+    g_step = name;
+    LOGI("step: %s", name);
+    if (!g_stepsPath[0]) return;
+    if (FILE *file = std::fopen(g_stepsPath, "a")) {
+        std::fprintf(file, "%s\n", name);
+        std::fclose(file);
+    }
+}
+
+_Unwind_Reason_Code crashFrame(_Unwind_Context *context, void *argument) {
+    const int fd = *static_cast<int *>(argument);
+    const uintptr_t pc = _Unwind_GetIP(context);
+    if (!pc) return _URC_END_OF_STACK;
+    Dl_info info{};
+    if (dladdr(reinterpret_cast<void *>(pc), &info) && info.dli_fname)
+        dprintf(fd, "  %s+0x%zx %s\n", info.dli_fname, (size_t)(pc - (uintptr_t)info.dli_fbase), info.dli_sname ? info.dli_sname : "");
+    else dprintf(fd, "  0x%zx\n", (size_t)pc);
+    return _URC_NO_REASON;
+}
+
+void onCrash(int signal, siginfo_t *info, void *) {
+    int fd = open(g_crashPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd >= 0) {
+        dprintf(fd, "signal %d code %d address %p during step: %s\n", signal, info ? info->si_code : 0,
+                info ? info->si_addr : nullptr, g_step);
+        _Unwind_Backtrace(crashFrame, &fd);
+        close(fd);
+    }
+    sigaction(signal, &g_previous[signal], nullptr);
+    raise(signal);
+}
+
+void installCrashReport(const char *directory) {
+    if (!directory) return;
+    std::snprintf(g_stepsPath, sizeof(g_stepsPath), "%s/go-vr-steps.txt", directory);
+    std::snprintf(g_crashPath, sizeof(g_crashPath), "%s/go-vr-crash.txt", directory);
+    unlink(g_stepsPath);
+    static char stack[64 * 1024];
+    stack_t alternate{};
+    alternate.ss_sp = stack;
+    alternate.ss_size = sizeof(stack);
+    sigaltstack(&alternate, nullptr);
+    struct sigaction action{};
+    action.sa_sigaction = onCrash;
+    action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    for (int signal : {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE}) sigaction(signal, &action, &g_previous[signal]);
+}
 
 constexpr uint32_t kTrackedFlags = 15u | DROIDDECK_XR_POSE_3DOF;
 constexpr float kStandingHeight = 1.6f;
@@ -195,6 +253,7 @@ private:
     }
 
     void initialize() {
+        step("initialize");
         app_->userData = this;
         app_->onAppCmd = [](android_app *app, int32_t command) {
             auto *runtime = static_cast<GoVR *>(app->userData);
@@ -223,6 +282,7 @@ private:
         env_->DeleteLocalRef(activityClass);
         if (env_->ExceptionCheck()) { env_->ExceptionClear(); throw std::runtime_error("VR activity bridge methods unavailable"); }
         readSettings();
+        step("vrapi_Initialize");
 
         java_.Vm = app_->activity->vm;
         java_.Env = env_;
@@ -237,6 +297,8 @@ private:
             throw std::runtime_error("vrapi_Initialize failed: the Oculus VR runtime is unavailable");
         initialized_ = true;
         LOGI("VrApi %s", vrapi_GetVersionString());
+        step(vrapi_GetVersionString());
+        step("egl");
 
         display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         if (!eglInitialize(display_, nullptr, nullptr)) throw std::runtime_error("eglInitialize failed");
@@ -266,7 +328,9 @@ private:
         haptics_->magic = DROIDDECK_XR_HAPTIC_MAGIC;
         haptics_->version = DROIDDECK_XR_VERSION;
         if (!receiver_.Start(directory + "/" DROIDDECK_XR_FRAME_SOCKET)) throw std::runtime_error("VR frame receiver unavailable");
+        step("room resources");
         home_.Create(suggestedWidth, suggestedHeight);
+        step("ipc files");
         LOGI("eye %dx%d (suggested %dx%d), %.0f Hz display, guest every %d refresh(es)", eyeWidth_, eyeHeight_,
              suggestedWidth, suggestedHeight, settings_.refreshHz, settings_.guestDivisor);
         health();
@@ -288,6 +352,7 @@ private:
     }
 
     void enterVr() {
+        step("vrapi_EnterVrMode");
         ovrModeParms parms = vrapi_DefaultModeParms(&java_);
         parms.Flags |= VRAPI_MODE_FLAG_NATIVE_WINDOW | VRAPI_MODE_FLAG_FRONT_BUFFER_SRGB;
         parms.Flags &= ~VRAPI_MODE_FLAG_RESET_WINDOW_FULLSCREEN;
@@ -296,6 +361,7 @@ private:
         parms.ShareContext = (size_t)context_;
         ovr_ = vrapi_EnterVrMode(&parms);
         if (!ovr_) throw std::runtime_error("vrapi_EnterVrMode failed");
+        step("vr mode settings");
         if (vrapi_SetTrackingSpace(ovr_, VRAPI_TRACKING_SPACE_LOCAL_FLOOR) == ovrSuccess) floorOffset_ = 0.f;
         else {
             vrapi_SetTrackingSpace(ovr_, VRAPI_TRACKING_SPACE_LOCAL);
@@ -309,6 +375,7 @@ private:
         if (!(refreshHz_ >= 30.f && refreshHz_ <= 120.f)) refreshHz_ = 60.f;
         for (auto &arm : arms_) arm.Reset();
         remote_ = ovrDeviceIdType_Invalid;
+        step("in VR");
         LOGI("entered VR: %.0f Hz, CPU/GPU level %d/%d, floor offset %.2f m", refreshHz_,
              settings_.cpuLevel, settings_.gpuLevel, floorOffset_);
         health();
@@ -530,6 +597,7 @@ private:
     }
 
     void homeFrame(const ovrTracking2 &tracking, double displayTime, bool showScreen, bool showKeyboard) {
+        if (frames_ == 0) step("first room frame");
         attachGuest(false);
         if (tracking_) __atomic_store_n(&tracking_->active, 0u, __ATOMIC_RELEASE);
         if (std::isnan(homeY_) && (tracking.Status & VRAPI_TRACKING_STATUS_ORIENTATION_VALID))
@@ -590,7 +658,9 @@ private:
             checked(0, "Pointer callback failed");
         }
         lastTarget_ = target;
+        if (frames_ == 0) step("first room render");
         ovrLayerProjection2 layer = home_.Render(tracking, scene);
+        if (frames_ == 0) step("first room submit");
         layer.HeadPose.TimeInSeconds = displayTime;
         layer.Header.Flags |= VRAPI_FRAME_LAYER_FLAG_CHROMATIC_ABERRATION_CORRECTION;
         submit(&layer.Header, displayTime);
@@ -652,10 +722,12 @@ private:
 }
 
 void android_main(android_app *app) {
+    installCrashReport(app->activity->externalDataPath);
     GoVR runtime(app);
     try { runtime.run(); }
     catch (const std::exception &error) {
         LOGE("%s", error.what());
+        step(error.what());
         runtime.health(error.what());
         ANativeActivity_finish(app->activity);
     }

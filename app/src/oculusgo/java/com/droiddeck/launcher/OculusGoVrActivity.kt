@@ -58,6 +58,7 @@ class OculusGoVrActivity : NativeActivity() {
     private var lastBack = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        getExternalFilesDir(null)
         super.onCreate(savedInstanceState)
         if (!workerStarted) {
             workerStarted = true

@@ -20,6 +20,13 @@ object CrashHandler {
                             StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
                     )
                 }
+                // The Go has no file access to the app's private files; its external files folder is readable over USB.
+                if (OculusGo.isDevice()) runCatching {
+                    File(context.getExternalFilesDir(null), "go-last-crash.txt").writeText(
+                        "${java.time.Instant.now()} thread=${thread.name}\n" +
+                            StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
+                    )
+                }
                 val dir = SessionPaths.current()
                 if (dir != null && dir.isDirectory) {
                     val trace = StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
