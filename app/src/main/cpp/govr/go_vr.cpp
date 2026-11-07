@@ -36,9 +36,9 @@ namespace {
 constexpr uint32_t kTrackedFlags = 15u | DROIDDECK_XR_POSE_3DOF;
 constexpr float kStandingHeight = 1.6f;
 constexpr int64_t kStaleFrameNs = 500000000LL;
-constexpr int kImmersive = 1, kShowScreen = 2;
-constexpr int kTargetUi = 1, kTargetScreen = 2;
-constexpr int kUiWidth = 1024, kUiHeight = 512;
+constexpr int kImmersive = 1, kShowScreen = 2, kShowKeyboard = 4;
+constexpr int kTargetUi = 1, kTargetScreen = 2, kTargetKeyboard = 3;
+constexpr int kUiWidth = 1024, kUiHeight = 512, kKeyboardWidth = 1024, kKeyboardHeight = 384;
 
 struct Settings {
     float refreshHz = 72.f;
@@ -140,6 +140,7 @@ private:
     uint64_t frameIndex_ = 0, frames_ = 0, uploaded_ = 0;
     jmethodID frameCallback_ = nullptr, activeCallback_ = nullptr, statusCallback_ = nullptr;
     jmethodID homeCallback_ = nullptr, uiCallback_ = nullptr, screenCallback_ = nullptr, pointerCallback_ = nullptr;
+    jmethodID keyboardCallback_ = nullptr;
     govr::Home home_;
     float homeY_ = NAN;
     int lastTarget_ = 0;
@@ -217,6 +218,7 @@ private:
         uiCallback_ = env_->GetMethodID(activityClass, "onUiPixels", "()Ljava/nio/ByteBuffer;");
         screenCallback_ = env_->GetMethodID(activityClass, "onScreenTexture", "(I)[F");
         pointerCallback_ = env_->GetMethodID(activityClass, "onPointer", "(IFFZZZ)V");
+        keyboardCallback_ = env_->GetMethodID(activityClass, "onKeyboardPixels", "()Ljava/nio/ByteBuffer;");
         env_->DeleteLocalRef(activityClass);
         if (env_->ExceptionCheck()) { env_->ExceptionClear(); throw std::runtime_error("VR activity bridge methods unavailable"); }
         readSettings();
@@ -489,7 +491,7 @@ private:
         updateRemote(tracking, displayTime);
         const int flags = checked(env_->CallIntMethod(app_->activity->clazz, homeCallback_), "Home state callback failed");
         if (flags & kImmersive) steamVrFrame(tracking, displayTime);
-        else homeFrame(tracking, displayTime, flags & kShowScreen);
+        else homeFrame(tracking, displayTime, flags & kShowScreen, flags & kShowKeyboard);
         frames_++;
         if (frames_ % 360 == 0) {
             health();
@@ -510,7 +512,18 @@ private:
         vrapi_SubmitFrame2(ovr_, &description);
     }
 
-    void homeFrame(const ovrTracking2 &tracking, double displayTime, bool showScreen) {
+    void uploadPanel(jmethodID callback, int width, int height, bool keyboard) {
+        jobject pixels = checked(env_->CallObjectMethod(app_->activity->clazz, callback), "Panel callback failed");
+        if (!pixels) return;
+        void *address = env_->GetDirectBufferAddress(pixels);
+        if (address && env_->GetDirectBufferCapacity(pixels) == (jlong)width * height * 4) {
+            if (keyboard) home_.UploadKeyboard(address, width, height);
+            else home_.UploadUi(address, width, height);
+        }
+        env_->DeleteLocalRef(pixels);
+    }
+
+    void homeFrame(const ovrTracking2 &tracking, double displayTime, bool showScreen, bool showKeyboard) {
         attachGuest(false);
         if (tracking_) __atomic_store_n(&tracking_->active, 0u, __ATOMIC_RELEASE);
         if (std::isnan(homeY_) && (tracking.Status & VRAPI_TRACKING_STATUS_ORIENTATION_VALID))
@@ -520,17 +533,13 @@ private:
         scene.floorY = -floorOffset_;
         if (showScreen) {
             scene.screen = {0.f, eyeY + 0.25f, -2.4f, 2.56f, 1.44f, true};
-            scene.ui = {0.f, eyeY - 0.78f, -1.7f, 0.8f, 0.4f, true};
+            if (showKeyboard) scene.keyboard = {0.f, eyeY - 0.68f, -1.5f, 1.2f, 0.45f, true};
+            else scene.ui = {0.f, eyeY - 0.78f, -1.7f, 0.8f, 0.4f, true};
         } else {
             scene.ui = {0.f, eyeY - 0.1f, -1.6f, 1.0f, 0.5f, true};
         }
-        jobject pixels = checked(env_->CallObjectMethod(app_->activity->clazz, uiCallback_), "Home panel callback failed");
-        if (pixels) {
-            void *address = env_->GetDirectBufferAddress(pixels);
-            const jlong bytes = env_->GetDirectBufferCapacity(pixels);
-            if (address && bytes == kUiWidth * kUiHeight * 4) home_.UploadUi(address, kUiWidth, kUiHeight);
-            env_->DeleteLocalRef(pixels);
-        }
+        uploadPanel(uiCallback_, kUiWidth, kUiHeight, false);
+        uploadPanel(keyboardCallback_, kKeyboardWidth, kKeyboardHeight, true);
         if (showScreen) {
             auto matrix = static_cast<jfloatArray>(checked(env_->CallObjectMethod(app_->activity->clazz, screenCallback_,
                 (jint)home_.ScreenTexture()), "Steam screen callback failed"));
@@ -556,6 +565,9 @@ private:
             }
             if (scene.screen.Hit(origin, direction, &hitDistance, &hu, &hv) && hitDistance < distance) {
                 distance = hitDistance; target = kTargetScreen; u = hu; v = hv;
+            }
+            if (scene.keyboard.Hit(origin, direction, &hitDistance, &hu, &hv) && hitDistance < distance) {
+                distance = hitDistance; target = kTargetKeyboard; u = hu; v = hv;
             }
             scene.laser = true;
             scene.laserFrom = origin;

@@ -191,7 +191,7 @@ object AgentInput {
         ))
     }
 
-    private val TYPED: Map<Char, Pair<Int, Boolean>> = buildMap {
+    internal val TYPED: Map<Char, Pair<Int, Boolean>> = buildMap {
         for (c in 'a'..'z') put(c, KEYS.getValue(c.uppercase()) to false)
         for (c in 'A'..'Z') put(c, KEYS.getValue(c.toString()) to true)
         for (c in '0'..'9') put(c, KEYS.getValue(c.toString()) to false)

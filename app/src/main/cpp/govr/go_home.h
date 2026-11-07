@@ -60,12 +60,14 @@ public:
         screenProgram_ = Program(kQuadVertex, kScreenFragment);
         colorProgram_ = Program(kQuadVertex, kColorFragment);
         glGenVertexArrays(1, &vertexArray_);
-        glGenTextures(1, &uiTexture_);
-        glBindTexture(GL_TEXTURE_2D, uiTexture_);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        for (Panel *panel : {&ui_, &keyboard_}) {
+            glGenTextures(1, &panel->texture);
+            glBindTexture(GL_TEXTURE_2D, panel->texture);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
         glGenTextures(1, &screenTexture_);
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, screenTexture_);
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -85,26 +87,23 @@ public:
             if (program) glDeleteProgram(program);
         floorProgram_ = textureProgram_ = screenProgram_ = colorProgram_ = 0;
         if (vertexArray_) glDeleteVertexArrays(1, &vertexArray_);
-        if (uiTexture_) glDeleteTextures(1, &uiTexture_);
+        for (Panel *panel : {&ui_, &keyboard_}) {
+            if (panel->texture) glDeleteTextures(1, &panel->texture);
+            *panel = Panel{};
+        }
         if (screenTexture_) glDeleteTextures(1, &screenTexture_);
-        vertexArray_ = uiTexture_ = screenTexture_ = 0;
+        vertexArray_ = screenTexture_ = 0;
     }
 
     bool Ready() const { return eyes_[0].chain != nullptr; }
-    GLuint UiTexture() const { return uiTexture_; }
     GLuint ScreenTexture() const { return screenTexture_; }
 
-    void UploadUi(const void *rgba, int width, int height) {
-        glBindTexture(GL_TEXTURE_2D, uiTexture_);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        uiLoaded_ = true;
-    }
+    void UploadUi(const void *rgba, int width, int height) { Upload(ui_, rgba, width, height); }
+    void UploadKeyboard(const void *rgba, int width, int height) { Upload(keyboard_, rgba, width, height); }
 
     struct Scene {
         float floorY = 0;
-        Quad ui, screen;
+        Quad ui, screen, keyboard;
         bool screenLive = false;
         float screenTransform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
         bool laser = false;
@@ -151,11 +150,8 @@ public:
                     Draw(colorProgram_, viewProjection, model, dark);
                 }
             }
-            if (scene.ui.visible && uiLoaded_) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, uiTexture_);
-                Draw(textureProgram_, viewProjection, QuadModel(scene.ui), nullptr);
-            }
+            DrawPanel(ui_, scene.ui, viewProjection);
+            DrawPanel(keyboard_, scene.keyboard, viewProjection);
             if (scene.cursor) {
                 const float white[4] = {1.f, 1.f, 1.f, 1.f};
                 Draw(colorProgram_, viewProjection,
@@ -184,8 +180,27 @@ private:
     Eye eyes_[2];
     int width_ = 0, height_ = 0;
     GLuint floorProgram_ = 0, textureProgram_ = 0, screenProgram_ = 0, colorProgram_ = 0;
-    GLuint vertexArray_ = 0, uiTexture_ = 0, screenTexture_ = 0;
-    bool uiLoaded_ = false;
+    GLuint vertexArray_ = 0, screenTexture_ = 0;
+    struct Panel {
+        GLuint texture = 0;
+        bool loaded = false;
+    };
+    Panel ui_, keyboard_;
+
+    static void Upload(Panel &panel, const void *rgba, int width, int height) {
+        glBindTexture(GL_TEXTURE_2D, panel.texture);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        panel.loaded = true;
+    }
+
+    void DrawPanel(const Panel &panel, const Quad &quad, const ovrMatrix4f &viewProjection) {
+        if (!quad.visible || !panel.loaded) return;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, panel.texture);
+        Draw(textureProgram_, viewProjection, QuadModel(quad), nullptr);
+    }
 
     /* Quads are drawn from gl_VertexID as the -1..1 square in the XY plane; the floor lies in XZ. */
     static constexpr const char *kQuadVertex =

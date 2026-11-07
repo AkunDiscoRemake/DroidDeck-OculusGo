@@ -13,4 +13,6 @@
     <string name="go_vr_wait">Aguarde</string>
     <string name="go_vr_show_screen">Mostrar tela do Steam</string>
     <string name="go_vr_hide_screen">Ocultar tela do Steam</string>
+    <string name="go_vr_keyboard">Teclado</string>
+    <string name="go_vr_space">espaço</string>
 </resources>

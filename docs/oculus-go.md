@@ -85,6 +85,8 @@ the trigger or a touchpad click presses.
 2. The Steam session starts by itself. Its screen is the compositor's output, drawn through a
    `SurfaceTexture` in the room; pointing at it and holding the trigger touches it, so Steam's sign-in
    (the QR code works with the Steam mobile app) and dragging work. Back hides or shows the screen.
+   **Keyboard** opens a QWERTY panel below the screen (letters, numbers, a symbol layer, shift,
+   backspace, enter); its keys reach the focused Steam field as key presses, so passwords can be typed.
 3. SteamVR is installed by itself the first time.
 4. **Enter SteamVR** switches the room to the immersive path below. Quitting SteamVR from its
    dashboard returns to the room; leaving the app stops the session.

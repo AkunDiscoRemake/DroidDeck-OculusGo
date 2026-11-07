@@ -50,6 +50,9 @@ class OculusGoVrActivity : NativeActivity() {
     private var screenSurface: Surface? = null
     @Volatile private var screenFrame = false
     private val screenMatrix = FloatArray(16)
+    private val keyboard by lazy { VrKeyboard(getString(R.string.go_vr_space)) }
+    @Volatile private var keyboardVisible = false
+    private var lastKey = false
     private var touching = false
     private var lastClick = false
     private var lastBack = false
@@ -191,7 +194,12 @@ class OculusGoVrActivity : NativeActivity() {
         set(if (reason == null) Phase.READY else Phase.FAILED, reason ?: getString(R.string.go_vr_ready))
     }
 
-    fun onHomeFrame(): Int = (if (immersive) 1 else 0) or (if (showScreen && SessionState.running) 2 else 0)
+    fun onHomeFrame(): Int {
+        val screen = showScreen && SessionState.running
+        return (if (immersive) 1 else 0) or (if (screen) 2 else 0) or (if (screen && keyboardVisible) 4 else 0)
+    }
+
+    fun onKeyboardPixels(): ByteBuffer? = if (keyboardVisible) keyboard.pixels() else null
 
     fun onUiPixels(): ByteBuffer? {
         if (!uiDirty) return null
@@ -238,6 +246,13 @@ class OculusGoVrActivity : NativeActivity() {
         val press = target == TARGET_UI && (trigger || click)
         if (press && !lastClick) clickPanel(u, v)
         lastClick = press
+        val key = target == TARGET_KEYBOARD && (trigger || click)
+        if (key && !lastKey && keyboard.press(u, v)) {
+            keyboardVisible = false
+            uiDirty = true
+        }
+        if (!key && lastKey) keyboard.release()
+        lastKey = key
     }
 
     private fun clickPanel(u: Float, v: Float) {
@@ -245,6 +260,8 @@ class OculusGoVrActivity : NativeActivity() {
             if (SessionState.running && u in TOGGLE.left..TOGGLE.right && v in TOGGLE.top..TOGGLE.bottom) {
                 showScreen = !showScreen
                 uiDirty = true
+            } else if (SessionState.running && showScreen && u in KEYBOARD.left..KEYBOARD.right && v in KEYBOARD.top..KEYBOARD.bottom) {
+                keyboardVisible = true
             }
             return
         }
@@ -284,6 +301,7 @@ class OculusGoVrActivity : NativeActivity() {
         if (SessionState.running) {
             drawButton(canvas, TOGGLE, getString(if (showScreen) R.string.go_vr_hide_screen else R.string.go_vr_show_screen),
                 Color.rgb(60, 66, 80), 30f)
+            if (showScreen) drawButton(canvas, KEYBOARD, getString(R.string.go_vr_keyboard), Color.rgb(60, 66, 80), 30f)
         }
     }
 
@@ -362,10 +380,12 @@ class OculusGoVrActivity : NativeActivity() {
         private const val SCREEN_HEIGHT = 720
         private const val TARGET_UI = 1
         private const val TARGET_SCREEN = 2
+        private const val TARGET_KEYBOARD = 3
         private const val TOUCH_ID = 9
         private const val SCALE_FIT = 1
         private const val ALIGN_CENTER = 0
         private val BUTTON = RectF(0.08f, 0.50f, 0.92f, 0.76f)
-        private val TOGGLE = RectF(0.25f, 0.81f, 0.75f, 0.95f)
+        private val TOGGLE = RectF(0.08f, 0.81f, 0.49f, 0.95f)
+        private val KEYBOARD = RectF(0.51f, 0.81f, 0.92f, 0.95f)
     }
 }
