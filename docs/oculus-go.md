@@ -78,7 +78,7 @@ software. lavapipe runs on the CPU: expect a usable desktop and Steam UI, and lo
 The Go APK has no 2D screens. The Go shows a 2D activity of a VR app unwarped across both lenses,
 and its remote cannot drag a touch UI, so the app is declared `vr_only` and its only launcher entry
 is `OculusGoVrActivity`, which opens straight into a VR room (`cpp/govr/go_home.h`): a floor grid,
-a panel, and Steam's screen as a curved-free 16:9 screen in front of you. The remote's laser points;
+a panel, and Steam's screen as a flat 16:9 screen in front of you. The remote's laser points;
 the trigger or a touchpad click presses.
 
 1. **Install runtime** (first start only) downloads the Linux runtime with the panel's progress bar.
