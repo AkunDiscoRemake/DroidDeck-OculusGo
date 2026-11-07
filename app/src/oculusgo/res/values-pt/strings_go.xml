@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="go_vr_runtime_needed">O runtime Linux é necessário (vários GB, use Wi-Fi)</string>
+    <string name="go_vr_downloading">Baixando o runtime</string>
+    <string name="go_vr_starting_steam">Iniciando o Steam</string>
+    <string name="go_vr_installing_steamvr">Instalando o SteamVR</string>
+    <string name="go_vr_ready">SteamVR pronto. Entre no Steam na tela acima, se pedir.</string>
+    <string name="go_vr_entering">Entrando no SteamVR</string>
+    <string name="go_vr_session_ended">A sessão do Steam terminou</string>
+    <string name="go_vr_install">Instalar runtime</string>
+    <string name="go_vr_enter">Entrar no SteamVR</string>
+    <string name="go_vr_retry">Tentar de novo</string>
+    <string name="go_vr_wait">Aguarde</string>
+    <string name="go_vr_show_screen">Mostrar tela do Steam</string>
+    <string name="go_vr_hide_screen">Ocultar tela do Steam</string>
+</resources>

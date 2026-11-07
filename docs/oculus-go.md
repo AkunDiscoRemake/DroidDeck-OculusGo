@@ -73,11 +73,25 @@ If the bridge's self-test fails, `droiddeck-session` switches the session to Mes
 software. lavapipe runs on the CPU: expect a usable desktop and Steam UI, and low frame rates in
 3D. `LP_NUM_THREADS=3` leaves one core for Android and the VR compositor.
 
+## The VR room: SteamVR only
+
+The Go APK has no 2D screens. The Go shows a 2D activity of a VR app unwarped across both lenses,
+and its remote cannot drag a touch UI, so the app is declared `vr_only` and its only launcher entry
+is `OculusGoVrActivity`, which opens straight into a VR room (`cpp/govr/go_home.h`): a floor grid,
+a panel, and Steam's screen as a curved-free 16:9 screen in front of you. The remote's laser points;
+the trigger or a touchpad click presses.
+
+1. **Install runtime** (first start only) downloads the Linux runtime with the panel's progress bar.
+2. The Steam session starts by itself. Its screen is the compositor's output, drawn through a
+   `SurfaceTexture` in the room; pointing at it and holding the trigger touches it, so Steam's sign-in
+   (the QR code works with the Steam mobile app) and dragging work. Back hides or shows the screen.
+3. SteamVR is installed by itself the first time.
+4. **Enter SteamVR** switches the room to the immersive path below. Quitting SteamVR from its
+   dashboard returns to the room; leaving the app stops the session.
+
 ## Immersive SteamVR
 
-Enter SteamVR from the session menu's SteamVR tab, as on Quest. On a Go with the VrApi runtime
-packaged, it opens `OculusGoVrActivity` (`cpp/govr/go_vr.cpp`). The guest side is unchanged: the
-same `driver_droiddeck`, tracking file and frame channel as the Quest path.
+Inside SteamVR the guest side is the Quest path's driver, tracking file and frame channel.
 
 - **Head.** VrApi's predicted pose, in the floor-level tracking space when the system offers it
   (otherwise eye level plus 1.6 m). Position is VrApi's head-neck model; poses carry

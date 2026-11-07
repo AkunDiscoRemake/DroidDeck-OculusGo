@@ -529,9 +529,13 @@ static int dev_init(void) {
                    "generation %s)", g_colorspace_ext ? "enables" : "has no",
                    g_colorspace_ext ? "is possible where the screen surface offers one" : "is not possible: tone-mapped instead");
     }
+    /* A Vulkan 1.0 loader (Android 7.x/8.0, e.g. Oculus Go) has no vkEnumerateInstanceVersion and
+     * refuses any apiVersion above 1.0 with VK_ERROR_INCOMPATIBLE_DRIVER. */
+    const int loader_1_0 = !vk_loader_gipa()(VK_NULL_HANDLE, "vkEnumerateInstanceVersion");
     VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                              .pApplicationName = "droiddeck-wayland-present",
-                             .apiVersion = VK_API_VERSION_1_3};
+                             .apiVersion = loader_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_3};
+    if (loader_1_0) droiddeck_log("gpu", "display driver: Vulkan 1.0 loader; the compositor instance asks for 1.0");
     VkInstanceCreateInfo ici = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
                                 .pApplicationInfo = &app,
                                 .enabledExtensionCount = n_inst_exts,

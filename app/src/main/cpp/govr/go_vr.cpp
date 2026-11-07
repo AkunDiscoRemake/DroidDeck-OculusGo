@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include "arm_model.h"
+#include "go_home.h"
 #include "xr_frame_channel.h"
 #include "xr_frame_math.h"
 #include "xr_tracking.h"
@@ -35,6 +36,9 @@ namespace {
 constexpr uint32_t kTrackedFlags = 15u | DROIDDECK_XR_POSE_3DOF;
 constexpr float kStandingHeight = 1.6f;
 constexpr int64_t kStaleFrameNs = 500000000LL;
+constexpr int kImmersive = 1, kShowScreen = 2;
+constexpr int kTargetUi = 1, kTargetScreen = 2;
+constexpr int kUiWidth = 1024, kUiHeight = 512;
 
 struct Settings {
     float refreshHz = 72.f;
@@ -135,6 +139,10 @@ private:
     int eyeWidth_ = 0, eyeHeight_ = 0;
     uint64_t frameIndex_ = 0, frames_ = 0, uploaded_ = 0;
     jmethodID frameCallback_ = nullptr, activeCallback_ = nullptr, statusCallback_ = nullptr;
+    jmethodID homeCallback_ = nullptr, uiCallback_ = nullptr, screenCallback_ = nullptr, pointerCallback_ = nullptr;
+    govr::Home home_;
+    float homeY_ = NAN;
+    int lastTarget_ = 0;
     EGLDisplay display_ = EGL_NO_DISPLAY;
     EGLContext context_ = EGL_NO_CONTEXT;
     EGLSurface surface_ = EGL_NO_SURFACE;
@@ -205,6 +213,10 @@ private:
         activeCallback_ = env_->GetMethodID(activityClass, "onXrActive", "(Z)V");
         frameCallback_ = env_->GetMethodID(activityClass, "onXrFrame", "(J)V");
         statusCallback_ = env_->GetMethodID(activityClass, "onXrStatus", "()I");
+        homeCallback_ = env_->GetMethodID(activityClass, "onHomeFrame", "()I");
+        uiCallback_ = env_->GetMethodID(activityClass, "onUiPixels", "()Ljava/nio/ByteBuffer;");
+        screenCallback_ = env_->GetMethodID(activityClass, "onScreenTexture", "(I)[F");
+        pointerCallback_ = env_->GetMethodID(activityClass, "onPointer", "(IFFZZZ)V");
         env_->DeleteLocalRef(activityClass);
         if (env_->ExceptionCheck()) { env_->ExceptionClear(); throw std::runtime_error("VR activity bridge methods unavailable"); }
         readSettings();
@@ -246,6 +258,7 @@ private:
         haptics_->magic = DROIDDECK_XR_HAPTIC_MAGIC;
         haptics_->version = DROIDDECK_XR_VERSION;
         if (!receiver_.Start(directory + "/" DROIDDECK_XR_FRAME_SOCKET)) throw std::runtime_error("VR frame receiver unavailable");
+        home_.Create(suggestedWidth, suggestedHeight);
         LOGI("eye %dx%d (suggested %dx%d), %.0f Hz display, guest every %d refresh(es)", eyeWidth_, eyeHeight_,
              suggestedWidth, suggestedHeight, settings_.refreshHz, settings_.guestDivisor);
         health();
@@ -459,11 +472,113 @@ private:
     }
     DroidDeckXrPixels pending_;
 
+    template <typename T>
+    T checked(T value, const char *what) {
+        if (env_->ExceptionCheck()) {
+            env_->ExceptionDescribe();
+            env_->ExceptionClear();
+            throw std::runtime_error(what);
+        }
+        return value;
+    }
+
     void frame() {
         frameIndex_++;
         const double displayTime = vrapi_GetPredictedDisplayTime(ovr_, frameIndex_);
         const ovrTracking2 tracking = vrapi_GetPredictedTracking2(ovr_, displayTime);
         updateRemote(tracking, displayTime);
+        const int flags = checked(env_->CallIntMethod(app_->activity->clazz, homeCallback_), "Home state callback failed");
+        if (flags & kImmersive) steamVrFrame(tracking, displayTime);
+        else homeFrame(tracking, displayTime, flags & kShowScreen);
+        frames_++;
+        if (frames_ % 360 == 0) {
+            health();
+            LOGI("frames=%llu uploaded=%llu received=%llu rejected=%llu remote=%d immersive=%d", (unsigned long long)frames_,
+                 (unsigned long long)uploaded_, (unsigned long long)receiver_.Received(),
+                 (unsigned long long)receiver_.Rejected(), remoteHand_, flags & kImmersive);
+        }
+    }
+
+    void submit(const ovrLayerHeader2 *layer, double displayTime) {
+        const ovrLayerHeader2 *layers[] = {layer};
+        ovrSubmitFrameDescription2 description{};
+        description.SwapInterval = 1;
+        description.FrameIndex = frameIndex_;
+        description.DisplayTime = displayTime;
+        description.LayerCount = 1;
+        description.Layers = layers;
+        vrapi_SubmitFrame2(ovr_, &description);
+    }
+
+    void homeFrame(const ovrTracking2 &tracking, double displayTime, bool showScreen) {
+        attachGuest(false);
+        if (tracking_) __atomic_store_n(&tracking_->active, 0u, __ATOMIC_RELEASE);
+        if (std::isnan(homeY_) && (tracking.Status & VRAPI_TRACKING_STATUS_ORIENTATION_VALID))
+            homeY_ = tracking.HeadPose.Pose.Position.y;
+        const float eyeY = std::isnan(homeY_) ? kStandingHeight - floorOffset_ : homeY_;
+        govr::Home::Scene scene;
+        scene.floorY = -floorOffset_;
+        if (showScreen) {
+            scene.screen = {0.f, eyeY + 0.25f, -2.4f, 2.56f, 1.44f, true};
+            scene.ui = {0.f, eyeY - 0.78f, -1.7f, 0.8f, 0.4f, true};
+        } else {
+            scene.ui = {0.f, eyeY - 0.1f, -1.6f, 1.0f, 0.5f, true};
+        }
+        jobject pixels = checked(env_->CallObjectMethod(app_->activity->clazz, uiCallback_), "Home panel callback failed");
+        if (pixels) {
+            void *address = env_->GetDirectBufferAddress(pixels);
+            const jlong bytes = env_->GetDirectBufferCapacity(pixels);
+            if (address && bytes == kUiWidth * kUiHeight * 4) home_.UploadUi(address, kUiWidth, kUiHeight);
+            env_->DeleteLocalRef(pixels);
+        }
+        if (showScreen) {
+            auto matrix = static_cast<jfloatArray>(checked(env_->CallObjectMethod(app_->activity->clazz, screenCallback_,
+                (jint)home_.ScreenTexture()), "Steam screen callback failed"));
+            if (matrix) {
+                if (env_->GetArrayLength(matrix) == 16) {
+                    env_->GetFloatArrayRegion(matrix, 0, 16, scene.screenTransform);
+                    scene.screenLive = true;
+                }
+                env_->DeleteLocalRef(matrix);
+            }
+        }
+        int target = 0;
+        float u = 0, v = 0;
+        if (hand_.active) {
+            const auto &pose = hand_.pose;
+            const ovrVector3f origin{pose.position[0], pose.position[1] - floorOffset_, pose.position[2]};
+            const droiddeck::Vec3 forward = droiddeck::Rotate(
+                {pose.orientation[3], pose.orientation[0], pose.orientation[1], pose.orientation[2]}, {0.0, 0.0, -1.0});
+            const ovrVector3f direction{(float)forward.x, (float)forward.y, (float)forward.z};
+            float distance = 3.f, hitDistance = 0, hu = 0, hv = 0;
+            if (scene.ui.Hit(origin, direction, &hitDistance, &hu, &hv) && hitDistance < distance) {
+                distance = hitDistance; target = kTargetUi; u = hu; v = hv;
+            }
+            if (scene.screen.Hit(origin, direction, &hitDistance, &hu, &hv) && hitDistance < distance) {
+                distance = hitDistance; target = kTargetScreen; u = hu; v = hv;
+            }
+            scene.laser = true;
+            scene.laserFrom = origin;
+            scene.laserTo = {origin.x + direction.x * distance, origin.y + direction.y * distance, origin.z + direction.z * distance};
+            if (target) {
+                scene.cursor = true;
+                scene.cursorAt = scene.laserTo;
+            }
+        }
+        if (target || lastTarget_) {
+            env_->CallVoidMethod(app_->activity->clazz, pointerCallback_, (jint)target, u, v,
+                (jboolean)(hand_.trigger > 0.5f), (jboolean)((hand_.buttons & DROIDDECK_XR_PRIMARY_CLICK) != 0),
+                (jboolean)((hand_.buttons & DROIDDECK_XR_MENU_CLICK) != 0));
+            checked(0, "Pointer callback failed");
+        }
+        lastTarget_ = target;
+        ovrLayerProjection2 layer = home_.Render(tracking, scene);
+        layer.HeadPose.TimeInSeconds = displayTime;
+        layer.Header.Flags |= VRAPI_FRAME_LAYER_FLAG_CHROMATIC_ABERRATION_CORRECTION;
+        submit(&layer.Header, displayTime);
+    }
+
+    void steamVrFrame(const ovrTracking2 &tracking, double displayTime) {
         publishTracking(tracking, displayTime);
         attachGuest(true);
         if (frameIndex_ % (uint64_t)settings_.guestDivisor == 0) {
@@ -488,21 +603,7 @@ private:
             }
         } else layer = vrapi_DefaultLayerBlackProjection2();
         layer.Header.Flags |= VRAPI_FRAME_LAYER_FLAG_CHROMATIC_ABERRATION_CORRECTION;
-        const ovrLayerHeader2 *layers[] = {&layer.Header};
-        ovrSubmitFrameDescription2 description{};
-        description.SwapInterval = 1;
-        description.FrameIndex = frameIndex_;
-        description.DisplayTime = displayTime;
-        description.LayerCount = 1;
-        description.Layers = layers;
-        vrapi_SubmitFrame2(ovr_, &description);
-        frames_++;
-        if (frames_ % 360 == 0) {
-            health();
-            LOGI("frames=%llu uploaded=%llu received=%llu rejected=%llu remote=%d", (unsigned long long)frames_,
-                 (unsigned long long)uploaded_, (unsigned long long)receiver_.Received(),
-                 (unsigned long long)receiver_.Rejected(), remoteHand_);
-        }
+        submit(&layer.Header, displayTime);
     }
 
     void cleanup() {
@@ -518,6 +619,7 @@ private:
         }
         if (haptics_) munmap(haptics_, sizeof(DroidDeckXrHaptics));
         if (swapchain_) vrapi_DestroyTextureSwapChain(swapchain_);
+        home_.Destroy();
         if (display_ != EGL_NO_DISPLAY) {
             eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
             if (surface_ != EGL_NO_SURFACE) eglDestroySurface(display_, surface_);
