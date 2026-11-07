@@ -114,8 +114,10 @@ def main():
                 else:
                     unknown.append(lib)
             if unknown:
-                failures += 1
-                print(f"{path.name}: needs libraries absent from API {args.api}: {', '.join(unknown)}")
+                optional = path.name in args.optional
+                failures += 0 if optional else 1
+                note = " (optional: the app falls back)" if optional else ""
+                print(f"{path.name}: needs libraries absent from API {args.api}{note}: {', '.join(unknown)}")
                 continue
             if any(lib == "libc++_shared.so" for lib in needed(readelf, path)) and "libc++_shared.so" not in packaged:
                 continue

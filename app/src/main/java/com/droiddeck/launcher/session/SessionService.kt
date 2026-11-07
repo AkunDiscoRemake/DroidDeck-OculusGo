@@ -1004,10 +1004,12 @@ class SessionService : Service() {
         SessionState.mode == MODE_RUN && SessionState.program in setOf(NoSteamLaunch.PROTON_RUN, NoSteamLaunch.EPIC, NoSteamLaunch.BATTLENET)
 
     private fun startAudio(guest: MutableList<String>, sessionDir: File, directAudioPack: Boolean): PulseAudioComponent {
-        val wantsDirectAudio = directAudioPack &&
+        // The relay plays and records through AAudio, which Android only has from 8.0.
+        val aaudio = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+        val wantsDirectAudio = aaudio && directAudioPack &&
             (SessionState.mode == MODE_STEAM || SessionState.mode == MODE_DESKTOP || noSteamGame()) &&
             SessionPrefs.directAudio(this)
-        val wantsMic = SessionPrefs.micEnabled(this) &&
+        val wantsMic = aaudio && SessionPrefs.micEnabled(this) &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         guest.add("BL_MIC_ENABLED=" + if (wantsMic) "1" else "0")
         guest.add("AUDIO_DIRECT_MIC=" + if (wantsMic) "1" else "0")

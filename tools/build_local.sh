@@ -434,7 +434,7 @@ python3 tools/release/check_session_assets.py "${apk}"
 python3 tools/release/runtime_inputs.py apk "${apk}"
 if [[ "$build_variant" == oculusgo ]]; then
     python3 tools/oculusgo/check_api_level.py "${apk}" --ndk "${sdk_dir}/ndk/${ndk_version}" --api 25 \
-        --preload libddlegacylibc.so --optional libvkbridge_jni.so
+        --preload libddlegacylibc.so --optional libvkbridge_jni.so --optional libdirectaudiorelay.so
 fi
 audio_check="${staging_dir}/audio-check"
 mkdir -p "${audio_check}"

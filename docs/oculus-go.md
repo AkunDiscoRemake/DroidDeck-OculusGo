@@ -57,7 +57,8 @@ The standard APK keeps `minSdk 26`; only the `oculusgo` build type lowers it to 
   to load, and the existing fallback starts it as a separate process.
 - **Audio.** DirectAudio and the AAudio sinks need AAudio (API 26). Before 8.0 PulseAudio uses its
   `module-pipe-sink`, and `LegacyAudioOut` plays the FIFO through `AudioTrack` (48 kHz stereo,
-  about 40 ms of pipe buffer).
+  about 40 ms of pipe buffer). The DirectAudio relay, which also carries the microphone, needs
+  AAudio and is not started: games use PulseAudio and there is no microphone on the Go.
 
 ## Graphics: no Turnip, no Venus
 
