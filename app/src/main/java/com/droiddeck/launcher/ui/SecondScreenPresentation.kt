@@ -175,7 +175,7 @@ class SecondScreenPresentation(
             val view = menuView ?: androidx.compose.ui.platform.ComposeView(context).apply {
                 isFocusable = true
                 isFocusableInTouchMode = true
-                defaultFocusHighlightEnabled = false
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) defaultFocusHighlightEnabled = false
                 setContent { content() }
                 frame.addView(this, FrameLayout.LayoutParams(-1, -1))
                 menuView = this

@@ -23,11 +23,7 @@ object HostProcess {
                 if (eq > 0) builder.environment()[line.substring(0, eq)] = line.substring(eq + 1)
             }
             builder.redirectErrorStream(true)
-            if (onLine == null) {
-                if (outputFile == null) builder.redirectOutput(File("/dev/null"))
-                else builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outputFile))
-            }
-            val process = builder.start()
+            val process = if (onLine == null) ProcessCompat.startWithOutput(builder, outputFile, true) else builder.start()
             val pid = pidOf(process)
             Log.i(TAG, "started pid $pid: ${argv.first()} (${argv.size - 1} arguments)")
             if (onLine != null) {

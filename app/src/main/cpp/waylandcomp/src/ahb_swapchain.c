@@ -6,6 +6,7 @@
 #include "vk_present.h"
 #include "banner-ahb-v1-server-protocol.h"
 #include <android/hardware_buffer.h>
+#include "ahb_compat.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -87,7 +88,7 @@ static void buf_free(struct ahb_buf *ab) {
     if (ab->fence_fd >= 0) { close(ab->fence_fd); ab->fence_fd = -1; }
     wl_list_remove(&ab->link);
     *droiddeck_dmabuf_ahb_slot(ab->b) = NULL;
-    AHardwareBuffer_release(ab->ahb);
+    dd_ahb_release(ab->ahb);
     droiddeck_dmabuf_unref(ab->b);
     free(ab);
 }
@@ -278,7 +279,7 @@ static void ahb_attach(struct wl_client *c, struct wl_resource *r, struct wl_res
     int pr;
     do { pr = poll(&p, 1, 1000); } while (pr < 0 && errno == EINTR);
     AHardwareBuffer *ahb = NULL;
-    int rc = pr > 0 ? AHardwareBuffer_recvHandleFromUnixSocket(sock, &ahb) : -1;
+    int rc = pr > 0 ? dd_ahb_recv_handle(sock, &ahb) : -1;
     close(sock);
     if (rc != 0 || !ahb) {
         droiddeck_log("layer", "zero-copy: receiving %s's AHardwareBuffer failed (%s)", droiddeck_client_name(c),
@@ -286,18 +287,18 @@ static void ahb_attach(struct wl_client *c, struct wl_resource *r, struct wl_res
         return;
     }
     AHardwareBuffer_Desc d;
-    AHardwareBuffer_describe(ahb, &d);
+    dd_ahb_describe(ahb, &d);
     int bw, bh;
     droiddeck_dmabuf_size(b, &bw, &bh);
     if ((int)d.width != bw || (int)d.height != bh || (int)width != bw || (int)height != bh) {
         droiddeck_log("layer", "zero-copy: %s's AHardwareBuffer is %ux%u but its wl_buffer %dx%d, ignored",
                    droiddeck_client_name(c), d.width, d.height, bw, bh);
-        AHardwareBuffer_release(ahb);
+        dd_ahb_release(ahb);
         return;
     }
 
     struct ahb_buf *ab = calloc(1, sizeof(*ab));
-    if (!ab) { AHardwareBuffer_release(ahb); wl_client_post_no_memory(c); return; }
+    if (!ab) { dd_ahb_release(ahb); wl_client_post_no_memory(c); return; }
     ab->id = g_next_id++;
     ab->b = b;
     droiddeck_dmabuf_ref(b);

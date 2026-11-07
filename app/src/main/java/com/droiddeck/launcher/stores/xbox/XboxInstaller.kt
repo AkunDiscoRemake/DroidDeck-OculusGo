@@ -1,6 +1,7 @@
 package com.droiddeck.launcher.stores.xbox
 
 import android.content.Context
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.stores.*
 import com.droiddeck.launcher.stores.download.DownloadQueue
 import com.droiddeck.launcher.stores.download.DownloadStage
@@ -65,7 +66,7 @@ internal class XboxInstaller(private val app: Context, private val item: Catalog
                         }
                     }
                 } }
-                check(process.process.waitFor(15, TimeUnit.SECONDS)) { "Xbox installer did not exit." }
+                check(process.process.waitForCompat(15, TimeUnit.SECONDS)) { "Xbox installer did not exit." }
                 diagnostics.join(2000)
                 if (cancelled.get()) return null
                 check(!rejected.get()) { app.getString(com.droiddeck.launcher.R.string.stores_xbox_sign_in_again) }

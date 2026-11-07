@@ -750,8 +750,10 @@ Java_com_droiddeck_launcher_wayland_WaylandCompositor_nativeStreamMode(JNIEnv *e
 JNIEXPORT void JNICALL
 Java_com_droiddeck_launcher_wayland_WaylandCompositor_nativeStreamFrame(JNIEnv *env, jclass clazz, jobject hardwareBuffer) {
     if (!hardwareBuffer) return;
-    AHardwareBuffer *ahb = AHardwareBuffer_fromHardwareBuffer(env, hardwareBuffer);
-    if (ahb) droiddeck_stream_frame(ahb);
+    if (__builtin_available(android 26, *)) {
+        AHardwareBuffer *ahb = AHardwareBuffer_fromHardwareBuffer(env, hardwareBuffer);
+        if (ahb) droiddeck_stream_frame(ahb);
+    }
 }
 
 JNIEXPORT jint JNICALL

@@ -7,8 +7,10 @@ import com.droiddeck.launcher.gpu.SystemVulkanDriver
 import java.io.File
 
 object DeviceSupport {
+    /** The Oculus Go's Adreno 530 has no Turnip support; it takes the Vulkan bridge like a Mali (see OculusGo). */
     private val adrenoGpu by lazy {
-        File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists()
+        !com.droiddeck.launcher.session.OculusGo.isDevice() &&
+            (File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists())
     }
 
     fun adreno(): Boolean = adrenoGpu
@@ -28,7 +30,8 @@ object DeviceSupport {
             com.droiddeck.launcher.gpu.GpuInfo.detect().family.name.startsWith("MALI"))
     }
 
-    fun bridgeUsable(): Boolean = !adreno() && !SystemVulkanDriver.isAvailable() && File("/dev/mali0").exists()
+    fun bridgeUsable(): Boolean = !adreno() && !SystemVulkanDriver.isAvailable() &&
+        (File("/dev/mali0").exists() || com.droiddeck.launcher.session.OculusGo.isDevice())
 
     fun openDriverActive(context: Context): Boolean {
         if (adreno()) return false

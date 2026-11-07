@@ -16,6 +16,7 @@ import androidx.activity.ComponentActivity
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.droiddeck.launcher.core.AddonPack
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.stores.Store
 import com.droiddeck.launcher.stores.StoreAccounts
 import com.droiddeck.launcher.stores.StoreLogFiles
@@ -77,7 +78,7 @@ class XboxLoginActivity : ComponentActivity() {
                     }
                     progress("waiting for the Xbox helper", "Waiting for the Xbox helper…")
                     val timer = Thread({
-                        runCatching { if (!process.process.waitFor(10, TimeUnit.MINUTES)) process.process.destroy() }
+                        runCatching { if (!process.process.waitForCompat(10, TimeUnit.MINUTES)) process.process.destroy() }
                     }, "xbox-login-timeout").apply { start() }
                     var ready = false
                     var latest = 0L
@@ -122,7 +123,7 @@ class XboxLoginActivity : ComponentActivity() {
                         }
                     }
                     if (closed) return@use
-                    check(process.process.waitFor(5, TimeUnit.SECONDS)) { "the Xbox helper did not exit" }
+                    check(process.process.waitForCompat(5, TimeUnit.SECONDS)) { "the Xbox helper did not exit" }
                     val exit = process.process.exitValue()
                     check(exit == 0) { "the Xbox helper stopped with exit code $exit" }
                     check(ready) { "the Xbox helper never became ready" }

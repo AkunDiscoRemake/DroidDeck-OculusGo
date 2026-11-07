@@ -917,7 +917,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun createSessionOverlay(): ComposeView = ComposeView(this).apply {
         isFocusable = true
         isFocusableInTouchMode = true
-        defaultFocusHighlightEnabled = false
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) defaultFocusHighlightEnabled = false
         setContent {
             val uiPointer = appUiOwnsPointer()
             androidx.compose.runtime.SideEffect {
@@ -1208,7 +1208,8 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
                 com.droiddeck.launcher.glasses.GlassesMenuMirror.recenter()
             },
             steamVr = steamVrStatus,
-            immersiveSteamVr = com.droiddeck.launcher.session.QuestExperimental.isSupported(),
+            immersiveSteamVr = com.droiddeck.launcher.session.QuestExperimental.isSupported() ||
+                com.droiddeck.launcher.session.OculusGo.immersiveAvailable(this),
             onSteamVr = { action -> steamVrAction(action) },
             textureAnisotropy = if (drawerGameProfileId == null) textureAnisotropy else drawerTextureAnisotropy,
             textureLodBias = if (drawerGameProfileId == null) textureLodBias else drawerTextureLodBias,
@@ -3418,7 +3419,8 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
             }
             return
         }
-        val options = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(presentation.display.displayId)
+        val options = android.app.ActivityOptions.makeBasic()
+            .apply { if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) setLaunchDisplayId(presentation.display.displayId) }
         val opened = listOf(intent, android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).any {
             runCatching { startActivity(android.content.Intent(it).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK), options.toBundle()) }
                 .onFailure { e -> Log.w(TAG, "could not open ${it.action} on display ${presentation.display.displayId}", e) }
@@ -4038,6 +4040,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
         val view = window.decorView
         val want = (pointerLocked || relativeMouseAttached()) && resumed && hasWindowFocus() && !drawerOpen && !pcKeyboardOpen && !achievementsOpen && !inputSettingsOpen && !pipUi && !bottomOutputActive && !touchEditorOpen && mouseAttached()
         releaseDesktopMouseGrab()
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return
         if (want == view.hasPointerCapture()) return
         if (want) view.requestPointerCapture() else view.releasePointerCapture()
     }
@@ -4627,6 +4630,10 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun steamVrAction(action: String) {
+        if (action == "start" && com.droiddeck.launcher.session.OculusGo.immersiveAvailable(this)) {
+            startActivity(com.droiddeck.launcher.session.OculusGo.vrIntent(this))
+            return
+        }
         if (action == "start" && com.droiddeck.launcher.session.QuestExperimental.isSupported()) {
             startActivity(android.content.Intent(this, QuestXrActivity::class.java))
             return

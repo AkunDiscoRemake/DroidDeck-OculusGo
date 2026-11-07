@@ -53,11 +53,12 @@ object GameShortcuts {
 
     fun pin(activity: Activity, game: Library.SteamGame) {
         val manager = activity.getSystemService(ShortcutManager::class.java)
-        val requested = runCatching { manager.isRequestPinShortcutSupported &&
+        val requested = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && runCatching { manager.isRequestPinShortcutSupported &&
             manager.requestPinShortcut(info(activity, game), null) }.getOrDefault(false)
         if (!requested) Toast.makeText(activity, R.string.game_shortcut_unsupported, Toast.LENGTH_LONG).show()
     }
 
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
     fun result(activity: Activity, game: Library.SteamGame): Intent =
         activity.getSystemService(ShortcutManager::class.java).createShortcutResultIntent(info(activity, game))
 

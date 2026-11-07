@@ -1038,7 +1038,10 @@ public:
         const PadProfile profile = xrMode_ ? PadProfile::Touch : profile_;
         touch_ = profile == PadProfile::Touch;
         index_ = profile == PadProfile::Index;
-        const char *model = touch_ ? "DroidDeck Quest Touch" : index_ ? "DroidDeck Index Hand" : "DroidDeck Pad Hand";
+        // The Go remote keeps the Touch profile so games' Touch bindings apply; its trackpad acts as the stick.
+        const bool remote = xrMode_ && (packet.head.flags & DROIDDECK_XR_POSE_3DOF);
+        const char *model = remote ? "DroidDeck Go Controller" : touch_ ? "DroidDeck Quest Touch" :
+            index_ ? "DroidDeck Index Hand" : "DroidDeck Pad Hand";
         VRProperties()->SetStringProperty(c, Prop_ModelNumber_String, model);
         VRProperties()->SetStringProperty(c, Prop_ManufacturerName_String, touch_ ? "Meta" : index_ ? "Valve" : "DroidDeck");
         VRProperties()->SetStringProperty(c, Prop_TrackingSystemName_String, "droiddeck");
@@ -1077,7 +1080,7 @@ public:
             if (touch_) in->CreateBooleanComponent(c, "/input/thumbrest/touch", &thumbrestTouch_);
         }
         in->CreateHapticComponent(c, "/output/haptic", &haptic_);
-        Log("%s hand activated (%s)", right_ ? "right" : "left", xrMode_ ? "Quest Touch" : model);
+        Log("%s hand activated (%s)", right_ ? "right" : "left", remote ? model : xrMode_ ? "Quest Touch" : model);
         return VRInitError_None;
     }
     void Deactivate() override { ClearInputs(); id_ = k_unTrackedDeviceIndexInvalid; }
@@ -1376,7 +1379,9 @@ public:
         sentHz_ = hz;
         sentTan_ = tanHalf_;
         sentAspect_ = eyeAspect_;
-        VRProperties()->SetStringProperty(c, Prop_ModelNumber_String, xrMode_ ? "DroidDeck Quest OpenXR" : "DroidDeck Cardboard");
+        const bool threeDof = xrMode_ && (xr.head.flags & DROIDDECK_XR_POSE_3DOF);
+        VRProperties()->SetStringProperty(c, Prop_ModelNumber_String,
+            threeDof ? "DroidDeck Oculus Go" : xrMode_ ? "DroidDeck Quest OpenXR" : "DroidDeck Cardboard");
         VRProperties()->SetStringProperty(c, Prop_ManufacturerName_String, "DroidDeck");
         VRProperties()->SetStringProperty(c, Prop_TrackingSystemName_String, "droiddeck");
         VRProperties()->SetFloatProperty(c, Prop_UserIpdMeters_Float, 0.064f);

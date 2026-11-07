@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <android/log.h>
 #include <android/hardware_buffer.h>
+#include "ahb_compat.h"
 
 #define TAG "DroidDeckWayland"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -528,9 +529,13 @@ static int dev_init(void) {
                    "generation %s)", g_colorspace_ext ? "enables" : "has no",
                    g_colorspace_ext ? "is possible where the screen surface offers one" : "is not possible: tone-mapped instead");
     }
+    /* A Vulkan 1.0 loader (Android 7.x/8.0, e.g. Oculus Go) has no vkEnumerateInstanceVersion and
+     * refuses any apiVersion above 1.0 with VK_ERROR_INCOMPATIBLE_DRIVER. */
+    const int loader_1_0 = !vk_loader_gipa()(VK_NULL_HANDLE, "vkEnumerateInstanceVersion");
     VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                              .pApplicationName = "droiddeck-wayland-present",
-                             .apiVersion = VK_API_VERSION_1_3};
+                             .apiVersion = loader_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_3};
+    if (loader_1_0) droiddeck_log("gpu", "display driver: Vulkan 1.0 loader; the compositor instance asks for 1.0");
     VkInstanceCreateInfo ici = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
                                 .pApplicationInfo = &app,
                                 .enabledExtensionCount = n_inst_exts,
@@ -1095,7 +1100,7 @@ int vkp_android_buffer_supported(void) {
 struct vkp_image *vkp_image_from_android_buffer(AHardwareBuffer *buffer) {
     if (!buffer || !vkp_android_buffer_supported()) return NULL;
     AHardwareBuffer_Desc desc;
-    AHardwareBuffer_describe(buffer, &desc);
+    dd_ahb_describe(buffer, &desc);
     if (!desc.width || !desc.height || desc.layers != 1 ||
         (desc.usage & (AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT | AHARDWAREBUFFER_USAGE_GPU_MIPMAP_COMPLETE)) ||
         !(desc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE)) return NULL;
@@ -1147,7 +1152,7 @@ struct vkp_image *vkp_image_from_android_buffer(AHardwareBuffer *buffer) {
     if (result != VK_SUCCESS) goto fail;
     result = g_vk.BindImageMemory(g_dev, img->image, img->mem, 0);
     if (result != VK_SUCCESS) goto fail;
-    AHardwareBuffer_acquire(buffer);
+    dd_ahb_acquire(buffer);
     img->android_buffer = buffer;
     return img;
 fail:
@@ -1268,7 +1273,7 @@ struct vkp_image *vkp_image_from_ahb(AHardwareBuffer *ahb) {
         return NULL;
     }
     AHardwareBuffer_Desc desc;
-    AHardwareBuffer_describe(ahb, &desc);
+    dd_ahb_describe(ahb, &desc);
     VkAndroidHardwareBufferFormatPropertiesANDROID fp = {
         .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID};
     VkAndroidHardwareBufferPropertiesANDROID props = {
@@ -1319,7 +1324,7 @@ struct vkp_image *vkp_image_import_ahb(struct AHardwareBuffer *ahb, char *info, 
     if (info && info_n) info[0] = 0;
     if (!ahb || !vkp_can_import_ahb()) return NULL;
     AHardwareBuffer_Desc d;
-    AHardwareBuffer_describe(ahb, &d);
+    dd_ahb_describe(ahb, &d);
     VkAndroidHardwareBufferFormatPropertiesANDROID fp = {
         .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID};
     VkAndroidHardwareBufferPropertiesANDROID hp = {
@@ -1479,7 +1484,7 @@ void vkp_image_destroy(struct vkp_image *img) {
         if (img->image) g_vk.DestroyImage(g_dev, img->image, NULL);
         if (img->mem) g_vk.FreeMemory(g_dev, img->mem, NULL);
     }
-    if (img->android_buffer) AHardwareBuffer_release(img->android_buffer);
+    if (img->android_buffer) dd_ahb_release(img->android_buffer);
     free(img);
 }
 

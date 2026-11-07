@@ -30,7 +30,8 @@ build_variant=${DROIDDECK_BUILD_VARIANT:-release}
 case "$build_variant" in
     debug) gradle_task=assembleDebug ;;
     release) gradle_task=assembleRelease ;;
-    *) echo "DROIDDECK_BUILD_VARIANT must be debug or release" >&2; exit 1 ;;
+    oculusgo) gradle_task=assembleOculusgo ;;
+    *) echo "DROIDDECK_BUILD_VARIANT must be debug, release or oculusgo" >&2; exit 1 ;;
 esac
 
 if [[ ! -x "${sdk_dir}/platform-tools/adb" ]]; then
@@ -428,10 +429,13 @@ python3 tools/powervr/fetch.py
 bash tools/packs/build.sh app/build/packs
 python3 tools/release/runtime_inputs.py record
 ./gradlew "${gradle_task}" --console=plain -PndkVersion="${ndk_version}" ${gradle_rust_arg}
-python3 tools/release/check_session_assets.py "app/build/outputs/apk/${build_variant}/app-${build_variant}.apk"
-python3 tools/release/runtime_inputs.py apk "app/build/outputs/apk/${build_variant}/app-${build_variant}.apk"
-
-apk="${repo_root}/app/build/outputs/apk/${build_variant}/app-${build_variant}.apk"
+apk=$(ls "${repo_root}/app/build/outputs/apk/${build_variant}/"*.apk | head -1)
+python3 tools/release/check_session_assets.py "${apk}"
+python3 tools/release/runtime_inputs.py apk "${apk}"
+if [[ "$build_variant" == oculusgo ]]; then
+    python3 tools/oculusgo/check_api_level.py "${apk}" --ndk "${sdk_dir}/ndk/${ndk_version}" --api 25 \
+        --preload libddlegacylibc.so --optional libvkbridge_jni.so --optional libdirectaudiorelay.so
+fi
 audio_check="${staging_dir}/audio-check"
 mkdir -p "${audio_check}"
 unzip -p "${apk}" assets/pulseaudio.tzst | zstd -dc | tar -xf - -C "${audio_check}"

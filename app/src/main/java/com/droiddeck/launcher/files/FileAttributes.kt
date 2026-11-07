@@ -31,7 +31,8 @@ internal fun readFileAttrs(file: File): FileAttrState {
 
     var hidden = false
     var supported = true
-    try {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) supported = false
+    else try {
         hidden = (parseDosAttrib(android.system.Os.getxattr(path, DOSATTRIB_XATTR)) and FILE_ATTRIBUTE_HIDDEN) != 0
     } catch (e: android.system.ErrnoException) {
         supported = e.errno == android.system.OsConstants.ENODATA
@@ -52,7 +53,7 @@ internal fun setReadOnly(file: File, readOnly: Boolean): Boolean = runCatching {
     true
 }.getOrElse { file.setWritable(!readOnly, true) }
 
-internal fun setHidden(file: File, hidden: Boolean): Boolean = try {
+internal fun setHidden(file: File, hidden: Boolean): Boolean = if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) false else try {
     val path = file.absolutePath
     var attr = try {
         parseDosAttrib(android.system.Os.getxattr(path, DOSATTRIB_XATTR))

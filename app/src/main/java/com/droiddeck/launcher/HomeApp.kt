@@ -126,7 +126,8 @@ object HomeApp {
                 val app = info.applicationInfo
                 val updated = if (user == own) runCatching { pm.getPackageInfo(component.packageName, 0).lastUpdateTime }.getOrNull() else null
                 @Suppress("DEPRECATION")
-                val game = app.category == ApplicationInfo.CATEGORY_GAME || app.flags and ApplicationInfo.FLAG_IS_GAME != 0
+                val game = (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && app.category == ApplicationInfo.CATEGORY_GAME) ||
+                    app.flags and ApplicationInfo.FLAG_IS_GAME != 0
                 LaunchableApp(
                     label, component.packageName, component.className, icon,
                     system = app.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
@@ -142,7 +143,8 @@ object HomeApp {
     }
 
     fun launch(context: Context, app: LaunchableApp, displayId: Int? = null, bounds: Rect? = null) {
-        val options = displayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
+        val options = if (displayId != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
+            ActivityOptions.makeBasic().setLaunchDisplayId(displayId).toBundle() else null
         val launcher = context.getSystemService(LauncherApps::class.java)
         launcher.startMainActivity(app.component, app.user ?: Process.myUserHandle(), bounds, options)
     }

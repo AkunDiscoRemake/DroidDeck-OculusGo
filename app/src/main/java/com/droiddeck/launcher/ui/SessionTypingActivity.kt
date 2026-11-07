@@ -17,7 +17,8 @@ object SessionTyping {
         val intent = Intent(context, SessionTypingActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         runCatching {
-            context.startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(displayId).toBundle())
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) context.startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(displayId).toBundle())
+            else context.startActivity(intent)
         }.onFailure { launching = false }
     }
 

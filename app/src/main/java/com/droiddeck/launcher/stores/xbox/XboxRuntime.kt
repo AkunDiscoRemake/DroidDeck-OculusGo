@@ -1,6 +1,7 @@
 package com.droiddeck.launcher.stores.xbox
 
 import android.content.Context
+import com.droiddeck.launcher.core.aliveCompat
 import com.droiddeck.launcher.session.SessionState
 import com.droiddeck.launcher.stores.*
 import org.json.JSONObject
@@ -71,7 +72,7 @@ internal object XboxRuntime {
     private fun service(app: Context, account: String, current: Long, credentials: String): File = synchronized(startup) {
         val existing = synchronized(state) {
             check(generation == current) { "Xbox launch was cancelled" }
-            serviceSocket?.takeIf { child?.process?.isAlive == true && owner == account }
+            serviceSocket?.takeIf { child?.process?.aliveCompat == true && owner == account }
         }
         val socket = existing ?: newServiceSocket(app.filesDir)
         if (existing == null) {
@@ -90,9 +91,9 @@ internal object XboxRuntime {
                     while (input.read(buffer) >= 0) { Thread.yield() }
                 } } }, "xbox-service-output").start()
                 val deadline = android.os.SystemClock.elapsedRealtime() + 90_000
-                while (!socket.exists() && service.process.isAlive && SessionState.running &&
+                while (!socket.exists() && service.process.aliveCompat && SessionState.running &&
                     synchronized(state) { generation == current } && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(100)
-                check(socket.exists() && service.process.isAlive && SessionState.running) {
+                check(socket.exists() && service.process.aliveCompat && SessionState.running) {
                     "Xbox account service did not become ready. Check your sign-in and network connection."
                 }
             } catch (e: Exception) {

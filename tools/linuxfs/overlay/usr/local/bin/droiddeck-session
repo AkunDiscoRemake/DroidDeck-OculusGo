@@ -278,7 +278,13 @@ if [ "${BL_VKBRIDGE:-0}" = 1 ]; then
       elif printf '%s\n' "$bl_vkb_smoke" | grep -qE '^FAIL (image clear|draw)'; then
         bl_vkb_why=draw
       fi
-      if [ -n "$bl_vkb_why" ] && [ -r "${BL_VKBRIDGE_FALLBACK_ICD:-}" ]; then
+      if [ -n "$bl_vkb_why" ] && [ "${BL_OCULUS_GO:-0}" = 1 ] && [ -r "${BL_VKBRIDGE_FALLBACK_ICD:-}" ]; then
+        export VK_DRIVER_FILES=$BL_VKBRIDGE_FALLBACK_ICD VK_ICD_FILENAMES=$BL_VKBRIDGE_FALLBACK_ICD BL_VKBRIDGE=0
+        export GALLIUM_DRIVER=llvmpipe LIBGL_ALWAYS_SOFTWARE=1 BL_STEAM_SOFT_COMPOSITING=1
+        unset MESA_LOADER_DRIVER_OVERRIDE LIBGL_KOPPER_DRI2
+        echo "== vkbridge: self-test failed ($bl_vkb_why) on the Oculus Go; this session uses lavapipe (software Vulkan, $BL_VKBRIDGE_FALLBACK_ICD)"
+        [ -n "${BL_DEBUG_DIR:-}" ] && printf '%s\n%s\n' "$BL_VKBRIDGE_FALLBACK_ICD" "$bl_vkb_why" > "$BL_DEBUG_DIR/vkbridge-fallback" 2>/dev/null
+      elif [ -n "$bl_vkb_why" ] && [ -r "${BL_VKBRIDGE_FALLBACK_ICD:-}" ]; then
         export VK_DRIVER_FILES=$BL_VKBRIDGE_FALLBACK_ICD VK_ICD_FILENAMES=$BL_VKBRIDGE_FALLBACK_ICD BL_VKBRIDGE=0
         export BL_OPEN_DRIVER=1 BL_DRM_STANDIN=/dev/mali0
         [ "${BL_STEAM_GPU_COMPOSITING:-0}" = 1 ] || export BL_STEAM_SOFT_COMPOSITING=1

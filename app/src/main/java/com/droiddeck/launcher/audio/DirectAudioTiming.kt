@@ -16,7 +16,7 @@ object DirectAudioTiming {
         if (lowLatencyOutput) emptyList()
         else listOf("$PERIOD_ENV=$SLOW_OUTPUT_PERIOD_MS", "$BUFFER_ENV=$SLOW_OUTPUT_BUFFER_MS")
 
-    fun lowLatencyOutput(): Boolean = try {
+    fun lowLatencyOutput(): Boolean = if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) false else try {
         val track = AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_GAME)

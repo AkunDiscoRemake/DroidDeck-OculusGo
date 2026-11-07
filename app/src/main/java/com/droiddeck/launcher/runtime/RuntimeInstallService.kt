@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import com.droiddeck.launcher.FrontEndActivity
 import com.droiddeck.launcher.R
+import com.droiddeck.launcher.core.Notifications
 
 class RuntimeInstallService : Service() {
     override fun attachBaseContext(newBase: android.content.Context) =
@@ -67,7 +68,7 @@ class RuntimeInstallService : Service() {
 
     private fun notification(stage: String, percent: Int, title: String? = null): Notification {
         val manager = getSystemService(NotificationManager::class.java)
-        manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, getString(R.string.setup_runtime),
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, getString(R.string.setup_runtime),
             NotificationManager.IMPORTANCE_LOW).apply {
             description = getString(R.string.rtinst_channel_description)
             setShowBadge(false)
@@ -77,7 +78,7 @@ class RuntimeInstallService : Service() {
         val open = PendingIntent.getActivity(this, 0,
             Intent(this, FrontEndActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
             PendingIntent.FLAG_IMMUTABLE)
-        return Notification.Builder(this, CHANNEL_ID)
+        return Notifications.builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_session)
             .setContentTitle(title ?: getString(if (LinuxRuntimeInstaller.isMaintaining()) R.string.desktop_removing else if (LinuxRuntimeInstaller.isRemoving()) R.string.rtinst_title_removing else R.string.rtinst_title_installing))
             .setContentText(stage)

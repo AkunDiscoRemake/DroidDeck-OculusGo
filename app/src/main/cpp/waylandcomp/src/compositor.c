@@ -17,6 +17,7 @@
 #include <sys/sysmacros.h>
 #include <android/log.h>
 #include <android/hardware_buffer.h>
+#include "ahb_compat.h"
 #include <wayland-server.h>
 
 #include "xdg-shell-server-protocol.h"
@@ -2112,7 +2113,7 @@ static void stream_forget_all(void) {
     vkp_wait_idle();
     for (int i = 0; i < STREAM_SLOTS; i++) {
         if (g_stream_slots[i].img) vkp_image_destroy(g_stream_slots[i].img);
-        if (g_stream_slots[i].ahb) AHardwareBuffer_release(g_stream_slots[i].ahb);
+        if (g_stream_slots[i].ahb) dd_ahb_release(g_stream_slots[i].ahb);
         g_stream_slots[i].img = NULL; g_stream_slots[i].ahb = NULL; g_stream_slots[i].used = 0;
     }
     g_stream_img = NULL;
@@ -2124,20 +2125,20 @@ static void stream_take(void) {
     g_stream_pending = NULL;
     pthread_mutex_unlock(&g_stream_lock);
     if (!ahb) return;
-    if (!atomic_load(&g_stream_on)) { AHardwareBuffer_release(ahb); return; }
+    if (!atomic_load(&g_stream_on)) { dd_ahb_release(ahb); return; }
     int slot = -1, oldest = 0;
     for (int i = 0; i < STREAM_SLOTS; i++) {
         if (g_stream_slots[i].ahb == ahb) { slot = i; break; }
         if (g_stream_slots[i].used < g_stream_slots[oldest].used) oldest = i;
     }
     if (slot >= 0) {
-        AHardwareBuffer_release(ahb);
+        dd_ahb_release(ahb);
     } else {
         struct vkp_image *img = vkp_image_from_ahb(ahb);
         if (!img) {
             static int said;
             if (!said) { said = 1; droiddeck_log("stream", "a decoded frame could not be imported: nothing to show"); }
-            AHardwareBuffer_release(ahb);
+            dd_ahb_release(ahb);
             return;
         }
         droiddeck_log("stream", "decoded frame buffer imported (%dx%d)", vkp_image_width(img), vkp_image_height(img));
@@ -2147,7 +2148,7 @@ static void stream_take(void) {
             if (g_stream_img == g_stream_slots[slot].img) g_stream_img = NULL;
             vkp_image_destroy(g_stream_slots[slot].img);
         }
-        if (g_stream_slots[slot].ahb) AHardwareBuffer_release(g_stream_slots[slot].ahb);
+        if (g_stream_slots[slot].ahb) dd_ahb_release(g_stream_slots[slot].ahb);
         g_stream_slots[slot].ahb = ahb;
         g_stream_slots[slot].img = img;
     }
@@ -2191,12 +2192,12 @@ void droiddeck_stream_set(int on) {
 
 void droiddeck_stream_frame(AHardwareBuffer *ahb) {
     if (!ahb || !atomic_load(&g_stream_on) || g_input_pipe[1] < 0) return;
-    AHardwareBuffer_acquire(ahb);
+    dd_ahb_acquire(ahb);
     pthread_mutex_lock(&g_stream_lock);
     AHardwareBuffer *dropped = g_stream_pending;
     g_stream_pending = ahb;
     pthread_mutex_unlock(&g_stream_lock);
-    if (dropped) { AHardwareBuffer_release(dropped); return; }
+    if (dropped) { dd_ahb_release(dropped); return; }
     struct input_msg m = { 20, 0, 0, 0, 0 };
     ssize_t n = write(g_input_pipe[1], &m, sizeof(m));
     (void)n;

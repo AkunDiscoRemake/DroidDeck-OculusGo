@@ -1076,7 +1076,8 @@ class FrontEndActivity : ComponentActivity() {
     }
 
     private fun chooseGameShortcut(game: Library.SteamGame) {
-        setResult(RESULT_OK, com.droiddeck.launcher.frontend.GameShortcuts.result(this, game))
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
+            setResult(RESULT_OK, com.droiddeck.launcher.frontend.GameShortcuts.result(this, game))
         finish()
     }
 
@@ -2962,7 +2963,7 @@ class FrontEndActivity : ComponentActivity() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .apply { if (highlight != null) putExtra(":settings:fragment_args_key", highlight) }
         try {
-            if (displayId == null) startActivity(intent)
+            if (displayId == null || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) startActivity(intent)
             else startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(displayId).toBundle())
         } catch (error: Exception) {
             if (displayId != null) {

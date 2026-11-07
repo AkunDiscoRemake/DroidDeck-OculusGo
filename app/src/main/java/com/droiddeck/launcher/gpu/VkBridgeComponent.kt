@@ -30,7 +30,7 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
         val cmd = listOf(binary.absolutePath, "--socket", socket.absolutePath, "--log", logFile.absolutePath,
             "--cache-dir", cacheDir.absolutePath)
             .joinToString(" ") { it.replace("\\", "\\\\").replace(" ", "\\ ") }
-        val env = arrayOf("HOME=" + app().filesDir)
+        val env = arrayOf("HOME=" + app().filesDir) + com.droiddeck.launcher.core.LegacyLibc.environment(app())
         pid = HostProcess.start(cmd, env, app().filesDir, { status ->
             exited = true
             Log.w(TAG, "server exited with status $status")

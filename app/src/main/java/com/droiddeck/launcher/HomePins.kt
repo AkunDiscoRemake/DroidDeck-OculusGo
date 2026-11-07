@@ -52,6 +52,7 @@ object HomePins {
         }
     }
 
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
     fun accept(context: Context, request: LauncherApps.PinItemRequest): Boolean {
         val ok = runCatching { request.isValid && request.accept() }.getOrDefault(false)
         if (ok) refresh(context)

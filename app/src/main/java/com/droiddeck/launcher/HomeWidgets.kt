@@ -197,6 +197,7 @@ object HomeWidgets {
         if (pendingId == AppWidgetManager.INVALID_APPWIDGET_ID) add(activity, provider.info, null)
     }
 
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
     fun addPinned(activity: Activity, request: LauncherApps.PinItemRequest): Boolean {
         if (pendingId != AppWidgetManager.INVALID_APPWIDGET_ID) return false
         val info = request.getAppWidgetProviderInfo(activity) ?: return false
@@ -227,7 +228,7 @@ object HomeWidgets {
 
     private fun bound(activity: Activity, id: Int, info: AppWidgetProviderInfo) {
         val request = pinRequest
-        if (request == null) {
+        if (request == null || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
             configure(activity, id, info)
             return
         }

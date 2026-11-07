@@ -81,6 +81,7 @@ class SyncthingService : Service() {
         @Volatile private var running = false
 
         private fun channel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val nm = context.getSystemService(NotificationManager::class.java) ?: return
             if (nm.getNotificationChannel(CHANNEL) == null) {
                 nm.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.sync_notification_channel), NotificationManager.IMPORTANCE_LOW).apply {
@@ -92,7 +93,10 @@ class SyncthingService : Service() {
         fun start(context: Context) {
             if (running) return
             running = true
-            runCatching { context.startForegroundService(Intent(context, SyncthingService::class.java)) }.onFailure { running = false }
+            val intent = Intent(context, SyncthingService::class.java)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+            }.onFailure { running = false }
         }
 
         fun stop(context: Context) {

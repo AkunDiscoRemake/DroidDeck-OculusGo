@@ -2,6 +2,7 @@ package com.droiddeck.launcher.stores.xbox
 
 import android.content.Context
 import android.net.LocalServerSocket
+import com.droiddeck.launcher.core.aliveCompat
 import com.droiddeck.launcher.stores.Store
 import com.droiddeck.launcher.stores.StoreAccounts
 import org.json.JSONArray
@@ -45,7 +46,7 @@ internal class XboxCredentials(private val app: Context, expectedGeneration: Str
     private fun authorized(pid: Int): Boolean {
         if (!bound.await(5, java.util.concurrent.TimeUnit.SECONDS) || closed) return rejected("unbound")
         val process = backend ?: return rejected("missing-child")
-        if (!process.isAlive) return rejected("exited-child")
+        if (!process.aliveCompat) return rejected("exited-child")
         val root = com.droiddeck.launcher.core.HostProcess.pidOf(process)
         if (root <= 0 || pid <= 0) return rejected("missing-process-id")
         val identity = identity(pid, root) ?: return rejected("foreign-backend")
@@ -75,7 +76,7 @@ internal class XboxCredentials(private val app: Context, expectedGeneration: Str
 
     fun signalBackend(signal: Int) {
         val process = backend ?: return
-        if (!process.isAlive) return
+        if (!process.aliveCompat) return
         val root = com.droiddeck.launcher.core.HostProcess.pidOf(process)
         peers.forEach { (pid, expected) -> runCatching {
             if (identity(pid, root) == expected) android.system.Os.kill(pid, signal)
@@ -158,7 +159,7 @@ internal class XboxCredentials(private val app: Context, expectedGeneration: Str
                             rejected("loopback-key"); error("loopback key")
                         }
                         if (!loopbackOwner(it.port)) { rejected("loopback-owner"); error("loopback owner") }
-                        check(bound.await(5, java.util.concurrent.TimeUnit.SECONDS) && backend?.isAlive == true)
+                        check(bound.await(5, java.util.concurrent.TimeUnit.SECONDS) && backend?.aliveCompat == true)
                         if (!loopbackUsed) { loopbackUsed = true; note("Backend reached the app over the loopback fallback") }
                         step("read")
                         val request = JSONObject(readLine(input, 2_097_152))

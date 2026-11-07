@@ -177,22 +177,24 @@ class WirelessAdbPairingService : Service() {
 
     private fun notification(stage: Stage): Notification {
         val manager = getSystemService(NotificationManager::class.java)
-        manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, getString(R.string.adbpair_channel_name),
-            NotificationManager.IMPORTANCE_HIGH).apply {
-            description = getString(R.string.adbpair_channel_description)
-            setShowBadge(false)
-            setSound(null, null)
-            enableVibration(false)
-        })
-        manager?.createNotificationChannel(NotificationChannel(PROGRESS_CHANNEL_ID, getString(R.string.adbpair_progress_channel_name),
-            NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, getString(R.string.adbpair_channel_name),
+                NotificationManager.IMPORTANCE_HIGH).apply {
+                description = getString(R.string.adbpair_channel_description)
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            })
+            manager?.createNotificationChannel(NotificationChannel(PROGRESS_CHANNEL_ID, getString(R.string.adbpair_progress_channel_name),
+                NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+        }
         val open = PendingIntent.getActivity(this, 0,
             Intent(this, FrontEndActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
             PendingIntent.FLAG_IMMUTABLE)
         val cancel = PendingIntent.getService(this, 1,
             Intent(this, WirelessAdbPairingService::class.java).setAction(ACTION_CANCEL), PendingIntent.FLAG_IMMUTABLE)
         val quiet = stage == Stage.Waiting || stage == Stage.Idle || stage is Stage.Working
-        val builder = Notification.Builder(this, if (quiet) PROGRESS_CHANNEL_ID else CHANNEL_ID)
+        val builder = Notifications.builder(this, if (quiet) PROGRESS_CHANNEL_ID else CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_session)
             .setContentIntent(open)
             .setShowWhen(false)

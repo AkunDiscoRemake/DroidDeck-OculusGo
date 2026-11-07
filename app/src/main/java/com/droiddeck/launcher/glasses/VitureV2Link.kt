@@ -179,6 +179,7 @@ internal class VitureV2Link internal constructor(
         const val PRODUCT_ID = 0x1301
 
         fun open(usb: UsbManager, device: UsbDevice, listener: Listener): VitureV2Link? {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return null
             if (device.vendorId != VitureProtocol.VENDOR_ID || device.productId != PRODUCT_ID) return null
             val candidates = (0 until device.interfaceCount).map(device::getInterface).filter {
                 it.interfaceClass == UsbConstants.USB_CLASS_HID && it.alternateSetting == 0 && it.endpointCount == 2
@@ -204,6 +205,7 @@ internal class VitureV2Link internal constructor(
         }
     }
 
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
     private class AndroidTransport(
         private val connection: UsbDeviceConnection,
         private val intf: UsbInterface,

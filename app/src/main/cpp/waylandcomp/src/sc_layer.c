@@ -4,6 +4,7 @@
 #include "droiddeck_color.h"
 #include "vk_present.h"
 #include <android/hardware_buffer.h>
+#include "ahb_compat.h"
 #include <android/native_window.h>
 #include <android/rect.h>
 #include <dlfcn.h>
@@ -262,18 +263,18 @@ static AHardwareBuffer *blank_buffer(void) {
         .width = 16, .height = 16, .layers = 1, .format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
         .usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE | AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY |
                  AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY};
-    if (AHardwareBuffer_allocate(&d, &g_blank) != 0 || !g_blank) { g_blank = NULL; return NULL; }
+    if (dd_ahb_allocate(&d, &g_blank) != 0 || !g_blank) { g_blank = NULL; return NULL; }
     void *p = NULL;
-    int locked = AHardwareBuffer_lock(g_blank, AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY, -1, NULL, &p);
+    int locked = dd_ahb_lock(g_blank, AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY, -1, NULL, &p);
     if (locked != 0 || !p) {
-        if (locked == 0) AHardwareBuffer_unlock(g_blank, NULL);
-        AHardwareBuffer_release(g_blank); g_blank = NULL;
+        if (locked == 0) dd_ahb_unlock(g_blank, NULL);
+        dd_ahb_release(g_blank); g_blank = NULL;
         return NULL;
     }
-    AHardwareBuffer_Desc got; AHardwareBuffer_describe(g_blank, &got);
+    AHardwareBuffer_Desc got; dd_ahb_describe(g_blank, &got);
     memset(p, 0, (size_t)got.stride * 4 * got.height);
-    if (AHardwareBuffer_unlock(g_blank, NULL) != 0) {
-        AHardwareBuffer_release(g_blank); g_blank = NULL;
+    if (dd_ahb_unlock(g_blank, NULL) != 0) {
+        dd_ahb_release(g_blank); g_blank = NULL;
         return NULL;
     }
     return g_blank;
@@ -363,7 +364,7 @@ static void drain_and_free_pools(void) {
             struct slot *s = &g_layers[i].slots[j];
             if (s->release_fd >= 0) { struct pollfd p = {.fd = s->release_fd, .events = POLLIN}; poll(&p, 1, 100); close(s->release_fd); }
             if (s->img) vkp_image_destroy(s->img);
-            if (s->ahb) AHardwareBuffer_release(s->ahb);
+            if (s->ahb) dd_ahb_release(s->ahb);
             memset(s, 0, sizeof(*s));
             s->release_fd = -1;
         }
@@ -422,7 +423,7 @@ static int alloc_slot(struct layer *l, struct slot *s, int w, int h, uint32_t fm
                      (tier == TIER_UBWC ? DROIDDECK_AHB_USAGE_VENDOR_UBWC : 0) |
                      (tier == TIER_LINEAR ? AHARDWAREBUFFER_USAGE_CPU_READ_RARELY : 0)};
         AHardwareBuffer *ahb = NULL;
-        if (AHardwareBuffer_allocate(&d, &ahb) != 0 || !ahb) {
+        if (dd_ahb_allocate(&d, &ahb) != 0 || !ahb) {
             if (tier < TIER_LINEAR) {
                 droiddeck_log("layer", "%s: gralloc refused a %dx%d pool buffer (%s): trying %s", l->name, w, h,
                            tier_name(tier), tier_name(tier + 1));
@@ -433,7 +434,7 @@ static int alloc_slot(struct layer *l, struct slot *s, int w, int h, uint32_t fm
             g_alloc_failed = 1;
             return -1;
         }
-        AHardwareBuffer_Desc got; AHardwareBuffer_describe(ahb, &got);
+        AHardwareBuffer_Desc got; dd_ahb_describe(ahb, &got);
         const struct droiddeck_native_handle *nh = api.getNativeHandle(ahb);
         uint64_t mod = MOD_LINEAR;
         struct vkp_image *img = NULL;
@@ -451,7 +452,7 @@ static int alloc_slot(struct layer *l, struct slot *s, int w, int h, uint32_t fm
                            "pool buffers are imported %s", l->name, nh ? nh->numFds : -1, nh ? nh->numInts : -1, hd,
                            vkp_can_import_ahb() ? "as AHardwareBuffers (the driver takes gralloc's own layout)"
                                                 : "as linear dma-bufs (this driver has no AHardwareBuffer import)");
-                AHardwareBuffer_release(ahb);
+                dd_ahb_release(ahb);
                 l->alloc_tier = vkp_can_import_ahb() ? TIER_PLAIN : TIER_LINEAR;
                 continue;
             }
@@ -484,7 +485,7 @@ static int alloc_slot(struct layer *l, struct slot *s, int w, int h, uint32_t fm
                        "compositor's Turnip failed via %s; gralloc handle %d fds / %d ints: %s", l->name,
                        pool_kind(mod), w, h, got.stride, tier_name(tier), (unsigned long long)got.usage, path,
                        nh ? nh->numFds : -1, nh ? nh->numInts : -1, hd);
-            AHardwareBuffer_release(ahb);
+            dd_ahb_release(ahb);
             if (tier < TIER_LINEAR) { l->alloc_tier = tier + 1; continue; }
             g_alloc_failed = 1;
             return -1;
@@ -531,7 +532,7 @@ static int take_free_slot(struct layer *l, int w, int h, uint32_t fmt, int *wait
     struct slot *s = &l->slots[idx];
     if (s->ahb && (s->w != w || s->h != h || s->fmt != fmt)) {
         if (fd >= 0) { close(fd); fd = -1; }
-        vkp_image_destroy(s->img); AHardwareBuffer_release(s->ahb);
+        vkp_image_destroy(s->img); dd_ahb_release(s->ahb);
         memset(s, 0, sizeof(*s)); s->release_fd = -1;
     }
     if (fd >= 0 && !vkp_can_wait_sync_fd()) {

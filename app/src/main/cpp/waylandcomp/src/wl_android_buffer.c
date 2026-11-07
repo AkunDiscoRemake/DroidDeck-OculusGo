@@ -5,6 +5,7 @@
 #include "droiddeck_ext.h"
 #include "wayland-android-server-protocol.h"
 #include <android/hardware_buffer.h>
+#include "ahb_compat.h"
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
@@ -90,7 +91,7 @@ static void buffer_resource_destroy(struct wl_resource *resource) {
 static struct wl_resource *create_android_buffer(struct wl_client *client, uint32_t id,
                                                   AHardwareBuffer *hardware) {
     AHardwareBuffer_Desc desc;
-    AHardwareBuffer_describe(hardware, &desc);
+    dd_ahb_describe(hardware, &desc);
     struct vkp_image *image = vkp_image_from_android_buffer(hardware);
     if (!image) return NULL;
     struct dmabuf_buffer *buffer = calloc(1, sizeof(*buffer));
@@ -140,7 +141,7 @@ static void create_buffer(struct wl_client *client, struct wl_resource *resource
         return;
     }
     struct wl_resource *buffer = create_android_buffer(client, id, hardware);
-    AHardwareBuffer_release(hardware);
+    dd_ahb_release(hardware);
     if (!buffer) wl_resource_post_error(resource, ANDROID_WLEGL_ERROR_BAD_HANDLE, "Vulkan cannot import this buffer");
 }
 
@@ -156,28 +157,28 @@ static void get_server_buffer(struct wl_client *client, struct wl_resource *reso
         .format = (uint32_t)format,
         .usage = (uint32_t)usage | AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE | AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT};
     AHardwareBuffer *hardware = NULL;
-    if (AHardwareBuffer_allocate(&desc, &hardware) != 0 || !hardware) {
+    if (dd_ahb_allocate(&desc, &hardware) != 0 || !hardware) {
         wl_resource_post_error(resource, ANDROID_WLEGL_ERROR_BAD_VALUE, "Android buffer allocation failed");
         return;
     }
-    AHardwareBuffer_describe(hardware, &desc);
+    dd_ahb_describe(hardware, &desc);
     const struct android_native_handle *handle = native_handle(hardware);
     if (!handle || handle->num_fds < 1 || handle->num_fds > MAX_HANDLE_FDS ||
         handle->num_ints < 0 || handle->num_ints > MAX_HANDLE_INTS) {
-        AHardwareBuffer_release(hardware);
+        dd_ahb_release(hardware);
         wl_resource_post_error(resource, ANDROID_WLEGL_ERROR_BAD_HANDLE, "invalid allocated native handle");
         return;
     }
     struct wl_resource *buffer = create_android_buffer(client, 0, hardware);
     if (!buffer) {
-        AHardwareBuffer_release(hardware);
+        dd_ahb_release(hardware);
         wl_resource_post_error(resource, ANDROID_WLEGL_ERROR_BAD_HANDLE, "Vulkan cannot import allocated buffer");
         return;
     }
     struct wl_resource *reply = wl_resource_create(client, &android_wlegl_server_buffer_handle_interface,
                                                    wl_resource_get_version(resource), id);
     if (!reply) {
-        wl_resource_destroy(buffer); AHardwareBuffer_release(hardware);
+        wl_resource_destroy(buffer); dd_ahb_release(hardware);
         wl_client_post_no_memory(client); return;
     }
     struct wl_array ints = {.size = (size_t)handle->num_ints * sizeof(int32_t),
@@ -188,7 +189,7 @@ static void get_server_buffer(struct wl_client *client, struct wl_resource *reso
     /* No linear_layout event: Android's opaque allocation need not be linear. */
     android_wlegl_server_buffer_handle_send_buffer(reply, buffer, (int32_t)desc.format, (int32_t)desc.stride);
     wl_resource_destroy(reply);
-    AHardwareBuffer_release(hardware);
+    dd_ahb_release(hardware);
 }
 
 static const struct android_wlegl_interface wlegl_impl = {

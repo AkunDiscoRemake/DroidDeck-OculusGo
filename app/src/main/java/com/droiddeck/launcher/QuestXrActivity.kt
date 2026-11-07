@@ -11,7 +11,7 @@ import com.droiddeck.launcher.session.SessionState
 import com.droiddeck.launcher.wayland.CompositorHost
 import com.droiddeck.launcher.wayland.WaylandCompositor
 
-class QuestXrActivity : NativeActivity() {
+open class QuestXrActivity : NativeActivity() {
     private var steamVrStarted = false
     @Volatile private var closing = false
     @Volatile private var steamVrStatus = SteamVr.Status.UNAVAILABLE

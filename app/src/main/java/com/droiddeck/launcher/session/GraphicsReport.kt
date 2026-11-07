@@ -150,7 +150,7 @@ object GraphicsReport {
         val access = (if (f.canRead()) "r" else "-") + (if (f.canWrite()) "w" else "-")
         val rdev = runCatching { Os.stat(path).st_rdev }.getOrNull()
         val numbers = rdev?.let { " ${major(it)}:${minor(it)}" }.orEmpty()
-        val label = runCatching { String(Os.getxattr(path, "security.selinux")).trimEnd('\u0000') }.getOrNull()
+        val label = if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) null else runCatching { String(Os.getxattr(path, "security.selinux")).trimEnd('\u0000') }.getOrNull()
         return "$path: $access$numbers" + (label?.let { " $it" } ?: "")
     }
 
