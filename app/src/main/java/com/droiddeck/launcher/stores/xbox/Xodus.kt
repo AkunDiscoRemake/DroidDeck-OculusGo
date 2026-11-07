@@ -3,6 +3,7 @@ package com.droiddeck.launcher.stores.xbox
 import android.content.Context
 import android.os.Environment
 import com.droiddeck.launcher.core.AddonPack
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.runtime.LinuxNetworkLinkComponent
 import com.droiddeck.launcher.runtime.LinuxRuntime
 import com.droiddeck.launcher.runtime.ProotFastPath
@@ -27,11 +28,11 @@ internal object Xodus {
             try {
                 credentials.close()
                 runCatching { process.outputStream.close() }
-                if (!process.waitFor(2, TimeUnit.SECONDS)) {
+                if (!process.waitForCompat(2, TimeUnit.SECONDS)) {
                     credentials.signalBackend(android.system.OsConstants.SIGINT)
-                    if (!process.waitFor(2, TimeUnit.SECONDS)) {
+                    if (!process.waitForCompat(2, TimeUnit.SECONDS)) {
                         credentials.signalBackend(android.system.OsConstants.SIGKILL)
-                        if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                        if (!process.waitForCompat(1, TimeUnit.SECONDS)) {
                             val pid = com.droiddeck.launcher.core.HostProcess.pidOf(process)
                             if (pid > 0) android.os.Process.killProcess(pid)
                         }
@@ -144,7 +145,7 @@ internal object Xodus {
                 } catch (t: Throwable) { readError = t; child.process.destroy() }
             }, "xbox-result").apply { start() }
             val diagnostic = diagnostics(child)
-            check(child.process.waitFor(timeout, TimeUnit.SECONDS)) { "Xbox request timed out. Try again." }
+            check(child.process.waitForCompat(timeout, TimeUnit.SECONDS)) { "Xbox request timed out. Try again." }
             reader.join(3000); diagnostic.join(3000)
             check(readError == null && !reader.isAlive) { "Xbox returned an invalid response." }
             check(child.process.exitValue() == 0) { "Xbox request failed. Check your account and network connection." }

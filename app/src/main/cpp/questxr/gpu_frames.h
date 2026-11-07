@@ -3,6 +3,7 @@
 #include <GLES3/gl31.h>
 #include <GLES2/gl2ext.h>
 #include <android/hardware_buffer.h>
+#include "ahb_compat.h"
 #include "xr_gpu_channel.h"
 
 class QuestGpuFrames {
@@ -127,13 +128,13 @@ private:
     void DropPool() {
         if (buffers_[0]) glFinish();
         glDeleteBuffers(buffers_.size(), buffers_.data()); buffers_.fill(0);
-        for (auto *&buffer : hardware_) { if (buffer) AHardwareBuffer_release(buffer); buffer = nullptr; }
+        for (auto *&buffer : hardware_) { if (buffer) dd_ahb_release(buffer); buffer = nullptr; }
         for (int &fd : fds_) { if (fd >= 0) close(fd); fd = -1; }
     }
     static int AllocationFd(AHardwareBuffer *buffer, uint64_t bytes, uint64_t &allocation) {
         int pair[2];
         if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair)) return -1;
-        if (AHardwareBuffer_sendHandleToUnixSocket(buffer, pair[0])) { close(pair[0]); close(pair[1]); return -1; }
+        if (dd_ahb_send_handle(buffer, pair[0])) { close(pair[0]); close(pair[1]); return -1; }
         close(pair[0]);
         int selected = -1; unsigned candidates = 0;
         for (;;) {
@@ -172,7 +173,7 @@ private:
         description.usage = AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER;
         glGenBuffers(buffers_.size(), buffers_.data());
         for (unsigned index = 0; index < XR_GPU_SLOTS; index++) {
-            if (AHardwareBuffer_allocate(&description, &hardware_[index])) { DropPool(); return false; }
+            if (dd_ahb_allocate(&description, &hardware_[index])) { DropPool(); return false; }
             fds_[index] = AllocationFd(hardware_[index], bytes, sizes_[index]);
             if (fds_[index] < 0) { DropPool(); return false; }
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers_[index]);

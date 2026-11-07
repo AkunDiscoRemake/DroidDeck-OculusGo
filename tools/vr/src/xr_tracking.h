@@ -13,6 +13,8 @@
 #define DROIDDECK_XR_PRIMARY_TOUCH (1u << 6)
 #define DROIDDECK_XR_SECONDARY_TOUCH (1u << 7)
 #define DROIDDECK_XR_THUMBREST_TOUCH (1u << 8)
+/* Pose flag: orientation from a 3DoF device; the position is a head-neck or arm model. */
+#define DROIDDECK_XR_POSE_3DOF (1u << 16)
 
 struct DroidDeckXrPose {
     float orientation[4];

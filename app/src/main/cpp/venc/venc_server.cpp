@@ -463,7 +463,7 @@ private:
         if (!codec_) return;
         AMediaFormat *p = AMediaFormat_new();
         AMediaFormat_setInt32(p, "video-bitrate", (int32_t)std::max(bitrate, 500000u));
-        AMediaCodec_setParameters(codec_, p);
+        if (__builtin_available(android 26, *)) AMediaCodec_setParameters(codec_, p);
         AMediaFormat_delete(p);
     }
 
@@ -472,7 +472,7 @@ private:
         if (f.keyframe) {
             AMediaFormat *p = AMediaFormat_new();
             AMediaFormat_setInt32(p, "request-sync", 0);
-            AMediaCodec_setParameters(codec_, p);
+            if (__builtin_available(android 26, *)) AMediaCodec_setParameters(codec_, p);
             AMediaFormat_delete(p);
         }
         ssize_t in = AMediaCodec_dequeueInputBuffer(codec_, 100000);

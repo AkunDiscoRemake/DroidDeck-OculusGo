@@ -18,6 +18,7 @@ import android.util.Log
 import com.droiddeck.launcher.FrontEndActivity
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.core.DeviceSupport
+import com.droiddeck.launcher.core.Notifications
 import com.droiddeck.launcher.stores.StoresState
 import com.droiddeck.launcher.stores.formatBytes
 import com.droiddeck.launcher.stores.formatSpeed
@@ -80,7 +81,7 @@ class StoreDownloadService : Service() {
         val rows = StoresState.latestDownloads.filter { it.isActive }
         val first = rows.firstOrNull { it.state == DownloadState.RUNNING } ?: rows.firstOrNull()
         val title = if (rows.size > 1) getString(R.string.stores_notification_many, rows.size) else first?.name ?: getString(R.string.stores_notification_one)
-        val b = Notification.Builder(this, CHANNEL)
+        val b = Notifications.builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(title)
             .setOngoing(true).setOnlyAlertOnce(true)
@@ -176,6 +177,7 @@ class StoreDownloadService : Service() {
         @Volatile private var instance: StoreDownloadService? = null
 
         private fun channels(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val nm = context.getSystemService(NotificationManager::class.java) ?: return
             if (nm.getNotificationChannel(CHANNEL) == null) {
                 nm.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.stores_notification_channel), NotificationManager.IMPORTANCE_LOW).apply {
@@ -226,7 +228,7 @@ class StoreDownloadService : Service() {
             val i = Intent(context, StoreDownloadService::class.java).setAction(ACTION_RESUME).putExtra(EXTRA_KEY, key)
             val resume = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) PendingIntent.getForegroundService(context, key.hashCode() + 5, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 else PendingIntent.getService(context, key.hashCode() + 5, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            val n = Notification.Builder(context, DONE_CHANNEL)
+            val n = Notifications.builder(context, DONE_CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setContentTitle(entry.name).setContentText(context.getString(R.string.stores_dl_paused))
                 .setContentIntent(resume).setAutoCancel(true)
@@ -239,7 +241,7 @@ class StoreDownloadService : Service() {
             val app = context.applicationContext
             channels(app)
             val code = entry.key.hashCode()
-            val builder = Notification.Builder(app, DONE_CHANNEL)
+            val builder = Notifications.builder(app, DONE_CHANNEL)
                 .setSmallIcon(if (installed) android.R.drawable.stat_sys_download_done else android.R.drawable.stat_notify_error)
                 .setContentTitle(app.getString(if (installed) R.string.stores_notification_installed else R.string.stores_notification_failed, entry.name))
                 .setAutoCancel(true)

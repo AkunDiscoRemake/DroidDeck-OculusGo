@@ -7,6 +7,7 @@ import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
 import com.droiddeck.launcher.core.HostProcess
+import com.droiddeck.launcher.core.aliveCompat
 import com.droiddeck.launcher.session.OrphanReaper
 import com.droiddeck.launcher.session.SessionPrefs
 import org.json.JSONObject
@@ -80,6 +81,7 @@ object RootSpawner {
 
     private fun stdio(fd: FileDescriptor?, write: Boolean): Stdio {
         if (fd == null) return Stdio(null, null, null)
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return Stdio(null, fd, null)
         val dup = try { ParcelFileDescriptor.dup(fd) } catch (e: IOException) { return Stdio(null, fd, null) }
         val path = File("/proc/self/fd/${dup.fd}")
         val opens = try {
@@ -130,9 +132,11 @@ object RootSpawner {
         }
         val streams = listOf(stdio(fds.getOrNull(0), false), stdio(fds.getOrNull(1), true), stdio(fds.getOrNull(2), true))
         try {
-            builder.redirectInput(streams[0].redirect ?: ProcessBuilder.Redirect.PIPE)
-            builder.redirectOutput(streams[1].redirect ?: ProcessBuilder.Redirect.PIPE)
-            builder.redirectError(streams[2].redirect ?: ProcessBuilder.Redirect.PIPE)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                builder.redirectInput(streams[0].redirect ?: ProcessBuilder.Redirect.PIPE)
+                builder.redirectOutput(streams[1].redirect ?: ProcessBuilder.Redirect.PIPE)
+                builder.redirectError(streams[2].redirect ?: ProcessBuilder.Redirect.PIPE)
+            }
             val process = builder.start()
             val pid = HostProcess.pidOf(process)
             OrphanReaper.keep(pid)
@@ -157,7 +161,7 @@ object RootSpawner {
                     }
                 } catch (e: IOException) {
                 }
-                if (process.isAlive) {
+                if (process.aliveCompat) {
                     Log.i(TAG, "root $id: its caller is gone; stopping it")
                     signal(pid, android.system.OsConstants.SIGHUP)
                     android.os.Process.sendSignal(pid, android.system.OsConstants.SIGQUIT)

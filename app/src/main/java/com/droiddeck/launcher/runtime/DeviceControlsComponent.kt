@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import com.droiddeck.launcher.core.Notifications
 import com.droiddeck.launcher.core.SessionPart
 import com.droiddeck.launcher.R
 import java.io.File
@@ -153,10 +154,10 @@ class DeviceControlsComponent(context: Context, root: File, private val activity
                         .putExtra(com.droiddeck.launcher.core.SteamIntegration.EXTRA_FEATURE, "BRIGHTNESS")
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     val manager = context.getSystemService(NotificationManager::class.java)
-                    manager.createNotificationChannel(NotificationChannel(PERMISSION_CHANNEL,
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) manager.createNotificationChannel(NotificationChannel(PERMISSION_CHANNEL,
                         context.getString(R.string.brightness_permission_title), NotificationManager.IMPORTANCE_DEFAULT))
                     val action = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-                    manager.notify(PERMISSION_NOTIFICATION, Notification.Builder(context, PERMISSION_CHANNEL)
+                    manager.notify(PERMISSION_NOTIFICATION, Notifications.builder(context, PERMISSION_CHANNEL)
                         .setSmallIcon(R.drawable.ic_stat_session)
                         .setContentTitle(context.getString(R.string.brightness_permission_title))
                         .setContentText(context.getString(R.string.brightness_permission_text))

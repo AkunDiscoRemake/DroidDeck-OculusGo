@@ -39,6 +39,7 @@ class SessionPipController(
         runCatching { activity.setPictureInPictureParams(params(rect)) }
     }
 
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
     private fun params(rect: Rect): PictureInPictureParams {
         val (w, h) = PipPolicy.aspect(SessionState.outputSize.first, SessionState.outputSize.second)
         val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(w, h))
@@ -59,7 +60,8 @@ class SessionPipController(
             return
         }
         prepare()
-        val entered = runCatching { activity.enterPictureInPictureMode(params(bounds())) }.getOrDefault(false)
+        val entered = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            runCatching { activity.enterPictureInPictureMode(params(bounds())) }.getOrDefault(false)
         if (!entered) {
             restore()
             Toast.makeText(activity, R.string.pip_unavailable, Toast.LENGTH_SHORT).show()
@@ -119,7 +121,8 @@ class SessionPipController(
     }
 
     companion object {
-        fun supported(context: android.content.Context) = context.packageManager
-            .hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        @androidx.annotation.ChecksSdkIntAtLeast(api = Build.VERSION_CODES.O)
+        fun supported(context: android.content.Context) = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
     }
 }

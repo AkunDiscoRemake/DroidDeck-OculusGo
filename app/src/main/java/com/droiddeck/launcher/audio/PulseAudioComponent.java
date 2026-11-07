@@ -5,6 +5,7 @@ import android.os.Process;
 import android.util.Log;
 
 import com.droiddeck.launcher.core.FileUtils;
+import com.droiddeck.launcher.core.ProcessCompat;
 import com.droiddeck.launcher.core.SessionPart;
 import com.droiddeck.launcher.core.HostProcess;
 import com.droiddeck.launcher.core.TarZst;
@@ -30,6 +31,7 @@ public class PulseAudioComponent extends SessionPart {
     private File logFile;
     private final String micFifoPath;
     private volatile int pid = -1;
+    private LegacyAudioOut legacyOut;
 
     public PulseAudioComponent(Context context) {
         this(context, null);
@@ -97,8 +99,14 @@ public class PulseAudioComponent extends SessionPart {
         config.add("load-module module-native-protocol-unix auth-anonymous=1 auth-cookie-enabled=0 socket=\""
                 + socket().getAbsolutePath() + "\"");
         config.add(".nofail");
-        config.add("load-module module-directaudio-native-sink sink_name=DirectAudio performance_mode=1 adaptive=1 decay=0 limiter=1 watchdog=1 volume=1.0 control_dir=" + deviceControls);
-        config.add("set-default-sink DirectAudio");
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            config.add("load-module module-directaudio-native-sink sink_name=DirectAudio performance_mode=1 adaptive=1 decay=0 limiter=1 watchdog=1 volume=1.0 control_dir=" + deviceControls);
+            config.add("set-default-sink DirectAudio");
+        } else {
+            legacyOut = new LegacyAudioOut(new File(workingDir, "playback.fifo"));
+            legacyOut.start();
+            config.addAll(legacyOut.sinkConfig());
+        }
         config.add(".fail");
         if (micFifoPath != null && !micFifoPath.isEmpty()) {
             config.add("load-module module-pipe-source source_name=" + MIC_SOURCE + " file=\""
@@ -110,6 +118,8 @@ public class PulseAudioComponent extends SessionPart {
         File modules = new File(workingDir, "modules/arm64");
         ArrayList<String> env = new ArrayList<>();
         env.add("LD_LIBRARY_PATH=/system/lib64:" + modules + ":" + workingDir.getAbsolutePath());
+        String preload = com.droiddeck.launcher.core.LegacyLibc.preload(app());
+        if (preload != null) env.add("LD_PRELOAD=" + preload);
         env.add("HOME=" + workingDir);
         env.add("TMPDIR=" + workingDir);
 
@@ -148,6 +158,10 @@ public class PulseAudioComponent extends SessionPart {
             String line;
             if (sinks == null) {
                 line = "== client sink: the daemon did not answer in 30 s; no fallback attempted";
+            } else if (legacyOut != null) {
+                line = sinks.contains(LegacyAudioOut.SINK)
+                        ? "== client sink: " + LegacyAudioOut.SINK + " (module-pipe-sink into AudioTrack; Android before 8.0 has no AAudio)"
+                        : "== client sink: " + LegacyAudioOut.SINK + " did not load - no client sound";
             } else if (sinks.contains("\tDirectAudio\t") || sinks.startsWith("DirectAudio\t") || sinks.contains("\tDirectAudio\n") || sinks.matches("(?s).*\\bDirectAudio\\b.*")) {
                 line = "== client sink: DirectAudio (module-directaudio-native-sink)";
             } else {
@@ -203,6 +217,7 @@ public class PulseAudioComponent extends SessionPart {
             builder.environment().put("HOME", workingDir.getAbsolutePath());
             builder.environment().put("TMPDIR", workingDir.getAbsolutePath());
             builder.environment().put("PULSE_SERVER", "unix:" + socket().getAbsolutePath());
+            legacyLibc(builder.environment());
             process = builder.start();
             String output;
             try (InputStream in = process.getInputStream();
@@ -214,8 +229,8 @@ public class PulseAudioComponent extends SessionPart {
                 }
                 output = outStream.toString(java.nio.charset.StandardCharsets.UTF_8.name());
             }
-            if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
+            if (!ProcessCompat.waitFor(process, 5, TimeUnit.SECONDS)) {
+                ProcessCompat.destroyForcibly(process);
                 return null;
             }
             return process.exitValue() == 0 ? output : null;
@@ -225,7 +240,7 @@ public class PulseAudioComponent extends SessionPart {
         } catch (Throwable t) {
             return null;
         } finally {
-            if (process != null && process.isAlive()) process.destroyForcibly();
+            if (process != null && ProcessCompat.isAlive(process)) ProcessCompat.destroyForcibly(process);
         }
     }
 
@@ -234,6 +249,10 @@ public class PulseAudioComponent extends SessionPart {
         if (pid != -1) {
             Process.killProcess(pid);
             pid = -1;
+        }
+        if (legacyOut != null) {
+            legacyOut.stop();
+            legacyOut = null;
         }
     }
 
@@ -258,14 +277,14 @@ public class PulseAudioComponent extends SessionPart {
                     pactl.getAbsolutePath(), "suspend-" + kind, name, Boolean.toString(suspended));
             builder.directory(workingDir);
             builder.redirectErrorStream(true);
-            builder.redirectOutput(new File("/dev/null"));
             builder.environment().put("LD_LIBRARY_PATH", "/system/lib64:" + modules + ":" + workingDir);
             builder.environment().put("HOME", workingDir.getAbsolutePath());
             builder.environment().put("TMPDIR", workingDir.getAbsolutePath());
             builder.environment().put("PULSE_SERVER", "unix:" + socket().getAbsolutePath());
-            process = builder.start();
-            if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
+            legacyLibc(builder.environment());
+            process = ProcessCompat.startWithOutput(builder, null, false);
+            if (!ProcessCompat.waitFor(process, 5, TimeUnit.SECONDS)) {
+                ProcessCompat.destroyForcibly(process);
                 Log.w(TAG, "timed out changing " + kind + " state to suspended=" + suspended);
                 return false;
             }
@@ -280,8 +299,13 @@ public class PulseAudioComponent extends SessionPart {
             Log.w(TAG, "could not change " + kind + " state", e);
             return false;
         } finally {
-            if (process != null && process.isAlive()) process.destroyForcibly();
+            if (process != null && ProcessCompat.isAlive(process)) ProcessCompat.destroyForcibly(process);
         }
+    }
+
+    private void legacyLibc(java.util.Map<String, String> environment) {
+        String preload = com.droiddeck.launcher.core.LegacyLibc.preload(app());
+        if (preload != null) environment.put("LD_PRELOAD", preload);
     }
 
     private java.io.PrintWriter openLog() {

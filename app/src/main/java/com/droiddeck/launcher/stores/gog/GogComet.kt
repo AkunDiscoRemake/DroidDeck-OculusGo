@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.droiddeck.launcher.core.AddonPack
+import com.droiddeck.launcher.core.aliveCompat
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.runtime.LinuxRuntime
 import com.droiddeck.launcher.session.SessionEvents
 import com.droiddeck.launcher.session.SessionPrefs
@@ -131,7 +133,7 @@ object GogComet {
             else if (StoreAccounts.read(context, Store.GOG)?.optString("refresh_token").isNullOrEmpty()) "sign-in-needed" else "credentials-unavailable")
         if (!SessionState.running || generation != SessionState.sessionId) return reply(false, "no-session")
         val user = credentials.getString("user_id")
-        if (process?.isAlive == true && account == user && session == SessionState.sessionId && identity(pid) == started) {
+        if (process?.aliveCompat == true && account == user && session == SessionState.sessionId && identity(pid) == started) {
             return JSONObject().put("ok", true).put("ready", true).put("reason", "ready")
         }
         stopLocked()
@@ -180,7 +182,7 @@ object GogComet {
                 ready.countDown()
             }, "gog-comet-output").start()
             child.outputStream.bufferedWriter().use { it.write(credentials.toString()) }
-            if (!ready.await(5, TimeUnit.SECONDS) || pid <= 1 || started == null || !child.isAlive) {
+            if (!ready.await(5, TimeUnit.SECONDS) || pid <= 1 || started == null || !child.aliveCompat) {
                 stopLocked(); return reply(false, "service-unavailable")
             }
             reply(true, "ready")
@@ -197,7 +199,7 @@ object GogComet {
     private fun stopLocked() {
         val child = process ?: return
         if (started != null && identity(pid) == started) android.os.Process.sendSignal(pid, 2)
-        if (!child.waitFor(5, TimeUnit.SECONDS)) {
+        if (!child.waitForCompat(5, TimeUnit.SECONDS)) {
             if (started != null && identity(pid) == started) android.os.Process.sendSignal(pid, 15)
             child.destroy()
         }

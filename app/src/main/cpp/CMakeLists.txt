@@ -6,6 +6,15 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wno-unused-function -Wimplicit-function
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/compat)
+if(ANDROID_PLATFORM_LEVEL LESS 26)
+    add_compile_definitions(__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__)
+    add_compile_options(-Werror=unguarded-availability)
+endif()
+
+option(DROIDDECK_OCULUS_GO "Build the Oculus Go immersive runtime (needs the Oculus Mobile SDK)" OFF)
+set(DROIDDECK_OVR_SDK_DIR "" CACHE PATH "Oculus Mobile SDK root (ovr_sdk_mobile)")
+
 add_subdirectory(adrenotools)
 
 add_subdirectory(thirdparty/dxbc)
@@ -62,4 +71,14 @@ if(DROIDDECK_UVC_DIR)
     target_include_directories(droiddeck_uvc PRIVATE "${DROIDDECK_UVC_DIR}/include")
     target_link_libraries(droiddeck_uvc PRIVATE rgb_uvc rgb_usb log)
     target_link_options(droiddeck_uvc PRIVATE -Wl,-z,max-page-size=16384)
+endif()
+
+if(ANDROID_PLATFORM_LEVEL LESS 26)
+    add_library(ddlegacylibc SHARED compat/legacy_libc.c)
+endif()
+
+if(DROIDDECK_OCULUS_GO AND DROIDDECK_OVR_SDK_DIR)
+    add_subdirectory(govr)
+elseif(DROIDDECK_OCULUS_GO)
+    message(WARNING "Oculus Go build without the Oculus Mobile SDK: immersive SteamVR is left out (set droiddeck.ovrSdk)")
 endif()

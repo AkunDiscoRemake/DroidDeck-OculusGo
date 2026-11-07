@@ -15,6 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.droiddeck.launcher.core.HostProcess
+import com.droiddeck.launcher.core.ProcessCompat
+import com.droiddeck.launcher.core.aliveCompat
+import com.droiddeck.launcher.core.destroyForciblyCompat
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.runtime.LinuxRuntime
 import com.droiddeck.launcher.session.OrphanReaper
 import com.droiddeck.launcher.session.SessionState
@@ -95,7 +99,7 @@ object Syncthing {
         enabled = SyncPrefs.enabled(app)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            runCatching { process?.destroyForcibly() }
+            runCatching { process?.destroyForciblyCompat() }
             previous?.uncaughtException(thread, error) ?: Runtime.getRuntime().halt(2)
         }
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
@@ -289,7 +293,7 @@ object Syncthing {
             val deadline = System.currentTimeMillis() + 60_000
             while (!client.ping()) {
                 if (gen != generation) return
-                if (!child.isAlive) throw SyncthingFailure("Syncthing exited during start (${child.exitValue()})")
+                if (!child.aliveCompat) throw SyncthingFailure("Syncthing exited during start (${child.exitValue()})")
                 if (System.currentTimeMillis() > deadline) throw SyncthingFailure("Syncthing did not answer on ${guiSocket(context).name}")
                 Thread.sleep(250)
             }
@@ -311,14 +315,13 @@ object Syncthing {
         val output = File(home(context), "generate.log")
         val child = ProcessBuilder(binary(context).path, "generate", "--gui-user", SyncthingConfig.GUI_USER, "--gui-password", "-")
             .redirectErrorStream(true)
-            .redirectOutput(output)
             .also { environment(context, it.environment()) }
-            .start()
+            .let { ProcessCompat.startWithOutput(it, output, false) }
         val pid = HostProcess.pidOf(child)
         OrphanReaper.keep(pid)
         try {
             child.outputStream.bufferedWriter().use { it.write(SyncPrefs.guiPassword(context) + "\n") }
-            if (!child.waitFor(60, TimeUnit.SECONDS) || child.exitValue() != 0 || !config(context).isFile) {
+            if (!child.waitForCompat(60, TimeUnit.SECONDS) || child.exitValue() != 0 || !config(context).isFile) {
                 child.destroy()
                 val last = runCatching { output.readLines().lastOrNull { it.isNotBlank() } }.getOrNull().orEmpty()
                 throw SyncthingFailure("syncthing generate failed: $last")
@@ -374,14 +377,14 @@ object Syncthing {
         val child = process ?: return
         api?.let { runCatching { it.shutdown() } }
         api = null
-        if (!child.waitFor(10, TimeUnit.SECONDS)) {
+        if (!child.waitForCompat(10, TimeUnit.SECONDS)) {
             child.destroy()
-            if (!child.waitFor(3, TimeUnit.SECONDS)) {
-                child.destroyForcibly()
-                child.waitFor(3, TimeUnit.SECONDS)
+            if (!child.waitForCompat(3, TimeUnit.SECONDS)) {
+                child.destroyForciblyCompat()
+                child.waitForCompat(3, TimeUnit.SECONDS)
             }
         }
-        if (child.isAlive) {
+        if (child.aliveCompat) {
             Log.w(TAG, "Syncthing did not exit")
             return
         }

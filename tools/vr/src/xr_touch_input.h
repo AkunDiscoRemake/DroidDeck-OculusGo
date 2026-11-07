@@ -11,6 +11,7 @@ struct XrTouchInput {
 };
 
 inline XrTouchInput xr_touch_input(const DroidDeckXrHand &hand, bool right) {
+    const bool singleRemote = hand.pose.flags & DROIDDECK_XR_POSE_3DOF;
     XrTouchInput input;
     if (!hand.active) return input;
     auto scalar = [](float value, float minimum) { return std::isfinite(value) ? std::clamp(value, minimum, 1.f) : 0.f; };
@@ -23,7 +24,7 @@ inline XrTouchInput xr_touch_input(const DroidDeckXrHand &hand, bool right) {
     input.stickClick = hand.buttons & DROIDDECK_XR_STICK_CLICK;
     input.primaryClick = hand.buttons & DROIDDECK_XR_PRIMARY_CLICK;
     input.secondaryClick = hand.buttons & DROIDDECK_XR_SECONDARY_CLICK;
-    input.systemClick = !right && (hand.buttons & DROIDDECK_XR_MENU_CLICK);
+    input.systemClick = (!right || singleRemote) && (hand.buttons & DROIDDECK_XR_MENU_CLICK);
     input.triggerTouch = hand.buttons & DROIDDECK_XR_TRIGGER_TOUCH;
     input.stickTouch = hand.buttons & DROIDDECK_XR_STICK_TOUCH;
     input.primaryTouch = hand.buttons & DROIDDECK_XR_PRIMARY_TOUCH;

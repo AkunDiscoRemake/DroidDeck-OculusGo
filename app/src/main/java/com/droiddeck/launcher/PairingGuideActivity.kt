@@ -116,6 +116,7 @@ class PairingGuideActivity : ComponentActivity() {
     }
 
     private fun enterPip() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return
         inPip = runCatching {
             enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(4, 3)).build())
         }.getOrDefault(false)
@@ -131,7 +132,7 @@ class PairingGuideActivity : ComponentActivity() {
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val display = settingsDisplay
         runCatching {
-            if (display == null) startActivity(intent)
+            if (display == null || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) startActivity(intent)
             else startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(display).toBundle())
         }.onFailure {
             runCatching { startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

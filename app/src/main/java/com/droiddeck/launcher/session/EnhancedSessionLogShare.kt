@@ -47,6 +47,8 @@ internal interface SecureSourceOpener {
 }
 
 internal object EnhancedSessionLogShare {
+    /** Linux's O_CLOEXEC; OsConstants exposes it only from API 27. */
+    private const val O_CLOEXEC = 0x80000
     private enum class Category(val suffix: String) { SESSION("session"), GRAPHICS("graphics"), GAMES("games") }
 
     internal class DiagnosticStageLease internal constructor(
@@ -513,7 +515,7 @@ internal object EnhancedSessionLogShare {
     private fun openDescriptor(path: String): java.io.FileDescriptor? = runCatching {
         Os.open(
             path,
-            OsConstants.O_RDONLY or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW or OsConstants.O_NONBLOCK,
+            OsConstants.O_RDONLY or O_CLOEXEC or OsConstants.O_NOFOLLOW or OsConstants.O_NONBLOCK,
             0,
         )
     }.getOrNull()

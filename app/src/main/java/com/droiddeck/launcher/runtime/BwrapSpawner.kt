@@ -9,6 +9,9 @@ import android.util.Base64
 import android.util.Log
 import com.droiddeck.launcher.core.FileUtils
 import com.droiddeck.launcher.core.HostProcess
+import com.droiddeck.launcher.core.aliveCompat
+import com.droiddeck.launcher.core.destroyForciblyCompat
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.session.SessionPrefs
 import org.json.JSONObject
 import java.io.DataInputStream
@@ -372,7 +375,7 @@ object BwrapSpawner {
         Thread({
             try { while (client.inputStream.read() >= 0) {   } }
             catch (e: IOException) {   }
-            if (process.isAlive) {
+            if (process.aliveCompat) {
                 Log.i(TAG, "sandbox $id: its bwrap is gone; stopping it")
                 if (pid > 0) {
                     runCatching { android.system.Os.kill(pid, android.system.OsConstants.SIGQUIT) }
@@ -380,7 +383,7 @@ object BwrapSpawner {
                     process.destroy()
                 }
                 try {
-                    if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) process.destroyForcibly()
+                    if (!process.waitForCompat(3, java.util.concurrent.TimeUnit.SECONDS)) process.destroyForciblyCompat()
                 } catch (_: InterruptedException) {
                 }
             }

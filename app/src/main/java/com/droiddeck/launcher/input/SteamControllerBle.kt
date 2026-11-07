@@ -107,7 +107,8 @@ class SteamControllerBle(private val context: Context, router: InputRouter? = nu
             return
         }
         Log.i(TAG, "connecting to \"${device.name}\"")
-        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE, BluetoothDevice.PHY_LE_1M_MASK, handler)
+        gatt = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE, BluetoothDevice.PHY_LE_1M_MASK, handler)
+        else device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
     }
 
     private fun disconnect(why: String) {

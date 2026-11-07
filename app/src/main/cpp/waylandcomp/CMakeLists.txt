@@ -101,5 +101,7 @@ target_link_libraries(droiddeckwayland
         dl
         log
         android
-        nativewindow
 )
+if(ANDROID_PLATFORM_LEVEL GREATER_EQUAL 26)
+    target_link_libraries(droiddeckwayland nativewindow)
+endif()

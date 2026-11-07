@@ -143,7 +143,13 @@ path = Path(sys.argv[1])
 try:
     settings = json.loads(path.read_text()) if path.exists() else {}
     section = settings.setdefault("steamvr", {})
-    defaults = {} if os.environ.get("DROIDDECK_VR_PRESENT", "").startswith("quest") else {"supersampleManualOverride": True, "supersampleScale": 1.0}
+    if os.environ.get("BL_OCULUS_GO") == "1":
+        # The Go headset already asks for a reduced eye size; SteamVR Home alone outweighs its GPU budget.
+        defaults = {"supersampleManualOverride": True, "supersampleScale": 1.0, "enableHomeApp": False}
+    elif os.environ.get("DROIDDECK_VR_PRESENT", "").startswith("quest"):
+        defaults = {}
+    else:
+        defaults = {"supersampleManualOverride": True, "supersampleScale": 1.0}
     changed = any(key not in section for key in defaults)
     for key, value in defaults.items():
         section.setdefault(key, value)

@@ -4,6 +4,9 @@ import android.content.Context
 import android.os.Environment
 import com.droiddeck.launcher.core.DownloadSource
 import com.droiddeck.launcher.core.HostProcess
+import com.droiddeck.launcher.core.aliveCompat
+import com.droiddeck.launcher.core.destroyForciblyCompat
+import com.droiddeck.launcher.core.waitForCompat
 import com.droiddeck.launcher.session.OrphanReaper
 import com.droiddeck.launcher.session.SessionFiles
 import com.droiddeck.launcher.session.SessionPaths
@@ -72,14 +75,14 @@ object GuestCommand {
         val watcher = cancelled?.let { flag ->
             Thread({
                 try {
-                    while (process.isAlive && !flag.get()) Thread.sleep(200)
+                    while (process.aliveCompat && !flag.get()) Thread.sleep(200)
                     if (flag.get()) {
                         if (pid > 0) {
                             runCatching { android.system.Os.kill(pid, android.system.OsConstants.SIGQUIT) }
                         } else {
                             process.destroy()
                         }
-                        if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) process.destroyForcibly()
+                        if (!process.waitForCompat(3, java.util.concurrent.TimeUnit.SECONDS)) process.destroyForciblyCompat()
                     }
                 } catch (_: InterruptedException) {
                 }

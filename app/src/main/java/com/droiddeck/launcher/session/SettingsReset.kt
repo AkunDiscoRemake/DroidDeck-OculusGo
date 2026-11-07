@@ -66,6 +66,7 @@ object SettingsReset {
         }
 
         QuestExperimental.initialize(context)
+        OculusGo.initialize(context)
         runCatching { OfflineMode.apply(context, LinuxRuntime.rootDir(context)) }
             .onFailure { ok = false; Log.w(TAG, "Could not turn offline mode off", it) }
         runCatching { GameEnvironmentStore.publish(context) }

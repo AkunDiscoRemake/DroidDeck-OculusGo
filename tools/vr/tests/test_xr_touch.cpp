@@ -24,6 +24,9 @@ int main() {
     hand.buttons = DROIDDECK_XR_MENU_CLICK;
     assert(xr_touch_input(hand, false).systemClick);
     assert(!xr_touch_input(hand, true).systemClick);
+    hand.pose.flags = DROIDDECK_XR_POSE_3DOF;
+    assert(xr_touch_input(hand, true).systemClick);
+    hand.pose.flags = 0;
     hand.buttons = 0;
     assert(!xr_touch_input(hand, false).systemClick);
     hand.buttons = DROIDDECK_XR_TRIGGER_TOUCH | DROIDDECK_XR_STICK_TOUCH | DROIDDECK_XR_PRIMARY_TOUCH |
@@ -47,5 +50,5 @@ int main() {
     assert(input.trigger == 0 && input.grip == 0 && input.stickX == 0 && input.stickY == 0);
     assert(!input.triggerClick && !input.gripClick && !input.stickClick && !input.primaryClick && !input.secondaryClick && !input.systemClick);
     assert(!input.triggerTouch && !input.stickTouch && !input.primaryTouch && !input.secondaryTouch && !input.thumbrestTouch);
-    std::puts("Touch input: independent face/stick/system, real capacitive touch, analog grip, clamping and inactive reset passed");
+    std::puts("Touch input: independent face/stick/system, single 3DoF remote system button, real capacitive touch, analog grip, clamping and inactive reset passed");
 }

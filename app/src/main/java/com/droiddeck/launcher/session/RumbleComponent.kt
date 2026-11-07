@@ -196,7 +196,7 @@ class RumbleComponent : SessionPart() {
 
     private class PhoneMotors(private val vibrator: Vibrator) : Motors {
         override val name = "the device's vibrator"
-        override fun play(strong: Int, weak: Int, ms: Long) = vibrator.vibrate(oneShot(vibrator, max(strong, weak), ms))
+        override fun play(strong: Int, weak: Int, ms: Long) = vibrate(vibrator, max(strong, weak), ms)
         override fun cancel() = vibrator.cancel()
     }
 
@@ -242,9 +242,9 @@ class RumbleComponent : SessionPart() {
     }
 
     private class LegacyPadMotors(override val name: String, private val vibrator: Vibrator) : Motors {
-        override fun play(strong: Int, weak: Int, ms: Long) = vibrator.vibrate(oneShot(vibrator, max(strong, weak), ms))
+        override fun play(strong: Int, weak: Int, ms: Long) = vibrate(vibrator, max(strong, weak), ms)
         override fun cancel() {
-            vibrator.vibrate(VibrationEffect.createOneShot(1L, 1))
+            vibrate(vibrator, 1, 1L)
             vibrator.cancel()
         }
     }
@@ -257,6 +257,12 @@ class RumbleComponent : SessionPart() {
         const val HOLD_EFFECT_MS = 2000L
         const val KEEPALIVE_MS = 1500L
 
+        private fun vibrate(vibrator: Vibrator, strength: Int, ms: Long) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(oneShot(vibrator, strength, ms))
+            else @Suppress("DEPRECATION") vibrator.vibrate(ms)
+        }
+
+        @RequiresApi(Build.VERSION_CODES.O)
         private fun oneShot(vibrator: Vibrator, strength: Int, ms: Long): VibrationEffect {
             val amplitude = if (vibrator.hasAmplitudeControl()) (strength * 255L / 65535L).toInt().coerceIn(1, 255)
                 else VibrationEffect.DEFAULT_AMPLITUDE

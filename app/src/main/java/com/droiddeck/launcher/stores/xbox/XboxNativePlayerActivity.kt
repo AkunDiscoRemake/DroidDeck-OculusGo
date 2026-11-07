@@ -455,7 +455,11 @@ class XboxNativePlayerActivity : ComponentActivity() {
         if (amplitude == 0 || durationMs <= 0) return
         val vibrator = (if (Build.VERSION.SDK_INT >= 31) getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
             else @Suppress("DEPRECATION") getSystemService(android.os.Vibrator::class.java)) ?: return
-        runCatching { vibrator.vibrate(VibrationEffect.createOneShot(durationMs.coerceAtMost(1000).toLong(), amplitude)) }
+        runCatching {
+            val ms = durationMs.coerceAtMost(1000).toLong()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(ms, amplitude))
+            else @Suppress("DEPRECATION") vibrator.vibrate(ms)
+        }
     }
 
     @Volatile private var overlayOn = false

@@ -806,7 +806,8 @@ object SessionPrefs {
     fun zinkLazy(context: Context): Boolean = prefs(context).getBoolean("zinkLazy", true)
 
     @JvmStatic
-    fun vkBridge(context: Context): Boolean = prefs(context).getBoolean("vkBridge", com.droiddeck.launcher.core.DeviceSupport.mali())
+    fun vkBridge(context: Context): Boolean = prefs(context).getBoolean("vkBridge",
+        com.droiddeck.launcher.core.DeviceSupport.mali() || OculusGo.isDevice())
 
     fun venus(context: Context): Boolean = prefs(context).getBoolean("venus", false)
 
