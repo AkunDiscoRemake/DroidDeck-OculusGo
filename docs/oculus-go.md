@@ -27,8 +27,10 @@ and point the build at it in `local.properties`:
 droiddeck.ovrSdk=/path/to/ovr_sdk_mobile
 ```
 
-(or `-PovrSdkDir=...`). Use an SDK release that still lists Oculus Go support; the runtime calls
-only VrApi functions that Go-era SDKs have. Without the SDK the APK still builds, with the panel
+(or `-PovrSdkDir=...`). The runtime asks the system driver for VrApi 1.1.25 whatever SDK it is
+built with: the Go's last driver refuses newer requests with an "update required" message that has
+no update behind it. Every call and structure used is present, with the same layout, from 1.1.25 to
+1.1.50. Without the SDK the APK still builds, with the panel
 app only. `build_local.sh` then runs `tools/oculusgo/check_api_level.py`, which checks every packaged
 native library against the API 25 system libraries.
 

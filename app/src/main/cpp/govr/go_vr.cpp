@@ -36,6 +36,7 @@ namespace {
 constexpr uint32_t kTrackedFlags = 15u | DROIDDECK_XR_POSE_3DOF;
 constexpr float kStandingHeight = 1.6f;
 constexpr int64_t kStaleFrameNs = 500000000LL;
+constexpr int kRequestedVrApiMinor = 25;
 constexpr int kImmersive = 1, kShowScreen = 2, kShowKeyboard = 4;
 constexpr int kTargetUi = 1, kTargetScreen = 2, kTargetKeyboard = 3;
 constexpr int kUiWidth = 1024, kUiHeight = 512, kKeyboardWidth = 1024, kKeyboardHeight = 384;
@@ -226,7 +227,12 @@ private:
         java_.Vm = app_->activity->vm;
         java_.Env = env_;
         java_.ActivityObject = app_->activity->clazz;
-        const ovrInitParms initParms = vrapi_DefaultInitParms(&java_);
+        ovrInitParms initParms = vrapi_DefaultInitParms(&java_);
+        // The Go's last system driver refuses apps that request a newer VrApi than it has (it shows
+        // "update required" with no update to install). Everything used here exists, with the same
+        // structure layouts, from VrApi 1.1.25 on.
+        initParms.MinorVersion = kRequestedVrApiMinor;
+        initParms.PatchVersion = 0;
         if (vrapi_Initialize(&initParms) != VRAPI_INITIALIZE_SUCCESS)
             throw std::runtime_error("vrapi_Initialize failed: the Oculus VR runtime is unavailable");
         initialized_ = true;
